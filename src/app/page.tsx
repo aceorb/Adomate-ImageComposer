@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { fabric } from 'fabric';
 import { ImageUpload } from '@/components/ImageUpload';
 import { CanvasEditor } from '@/components/CanvasEditor';
 import { TextToolsPanel } from '@/components/TextToolsPanel';
 import { LayersPanel } from '@/components/LayersPanel';
-import { TextLayer } from '@/types';
+import { HistoryPanel } from '@/components/HistoryPanel';
+import { TextLayer, CanvasState } from '@/types';
+import { useCanvasHistory } from '@/hooks/useCanvasHistory';
 
 export default function Home() {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
@@ -14,6 +16,105 @@ export default function Home() {
   const [fabricCanvas, setFabricCanvas] = useState<fabric.Canvas | null>(null);
   const [textLayers, setTextLayers] = useState<TextLayer[]>([]);
   const [selectedLayer, setSelectedLayer] = useState<TextLayer | null>(null);
+  
+  // History management
+  const initialState: CanvasState = {
+    backgroundImage: null,
+    textLayers: [],
+    canvasWidth: canvasDimensions.width,
+    canvasHeight: canvasDimensions.height,
+  };
+  
+  const {
+    currentState,
+    addToHistory,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    historyLength,
+  } = useCanvasHistory(initialState);
+  
+  // Restore state when history changes (undo/redo)
+  useEffect(() => {
+    if (currentState && fabricCanvas) {
+      // Update background image if different
+      if (currentState.backgroundImage !== backgroundImage) {
+        setBackgroundImage(currentState.backgroundImage);
+      }
+      
+      // Clear current canvas objects
+      fabricCanvas.clear();
+      
+      // Re-add background image if exists
+      if (currentState.backgroundImage) {
+        fabric.Image.fromURL(currentState.backgroundImage, (img) => {
+          if (!fabricCanvas) return;
+          
+          const scaleX = currentState.canvasWidth / img.width!;
+          const scaleY = currentState.canvasHeight / img.height!;
+          const scale = Math.min(scaleX, scaleY);
+          
+          img.scale(scale);
+          img.set({
+            left: (currentState.canvasWidth - img.getScaledWidth()) / 2,
+            top: (currentState.canvasHeight - img.getScaledHeight()) / 2,
+            selectable: false,
+            evented: false,
+            hoverCursor: 'default',
+            moveCursor: 'default',
+          });
+          
+          fabricCanvas.setBackgroundImage(img, fabricCanvas.renderAll.bind(fabricCanvas));
+        });
+      }
+      
+      // Recreate text layers
+      currentState.textLayers.forEach(layer => {
+        const fabricText = new fabric.Textbox(layer.text, {
+          left: layer.x,
+          top: layer.y,
+          fontSize: layer.fontSize,
+          fontFamily: layer.fontFamily,
+          fontWeight: layer.fontWeight,
+          fill: layer.color,
+          opacity: layer.opacity,
+          textAlign: layer.alignment,
+          width: 200,
+          splitByGrapheme: false,
+          editable: true,
+          editingBorderColor: '#2563eb',
+          cursorColor: '#2563eb',
+          cursorWidth: 2,
+          lineHeight: layer.lineHeight,
+          hasControls: true,
+          hasBorders: true,
+          cornerSize: 12,
+          cornerColor: '#2563eb',
+          cornerStyle: 'circle',
+          borderColor: '#2563eb',
+          borderDashArray: [5, 5],
+          transparentCorners: false,
+          rotatingPointOffset: 20,
+        });
+        
+        (fabricText as any).id = layer.id;
+        fabricCanvas.add(fabricText);
+      });
+      
+      fabricCanvas.requestRenderAll();
+      
+      // Update local state
+      setTextLayers(currentState.textLayers);
+      setCanvasDimensions({ 
+        width: currentState.canvasWidth, 
+        height: currentState.canvasHeight 
+      });
+      
+      // Clear selection
+      setSelectedLayer(null);
+    }
+  }, [currentState, fabricCanvas]);
 
   const handleImageUpload = (imageUrl: string, width: number, height: number) => {
     setBackgroundImage(imageUrl);
@@ -82,8 +183,23 @@ export default function Home() {
       }
     });
     
-    // Keyboard controls for nudging
+    // Keyboard controls for nudging and history
     const handleKeyDown = (e: KeyboardEvent) => {
+      // History shortcuts
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'z' && !e.shiftKey) {
+          e.preventDefault();
+          undo();
+          return;
+        }
+        if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
+          e.preventDefault();
+          redo();
+          return;
+        }
+      }
+      
+      // Nudging controls
       if (!canvas.getActiveObject()) return;
       
       const activeObject = canvas.getActiveObject();
@@ -178,6 +294,15 @@ export default function Home() {
     
     setTextLayers(prev => [...prev, newLayer]);
     setSelectedLayer(newLayer);
+    
+    // Add to history
+    const newState: CanvasState = {
+      backgroundImage,
+      textLayers: [...textLayers, newLayer],
+      canvasWidth: canvasDimensions.width,
+      canvasHeight: canvasDimensions.height,
+    };
+    addToHistory(newState);
   };
   
   const handleUpdateTextLayer = (id: string, updates: Partial<TextLayer>) => {
@@ -305,6 +430,15 @@ export default function Home() {
     
     setTextLayers(prev => [...prev, duplicatedLayer]);
     setSelectedLayer(duplicatedLayer);
+    
+    // Add to history
+    const newState: CanvasState = {
+      backgroundImage,
+      textLayers: [...textLayers, duplicatedLayer],
+      canvasWidth: canvasDimensions.width,
+      canvasHeight: canvasDimensions.height,
+    };
+    addToHistory(newState);
   };
   
   const handleDeleteLayer = (layerId: string) => {
@@ -316,11 +450,21 @@ export default function Home() {
       }
     }
     
-    setTextLayers(prev => prev.filter(l => l.id !== layerId));
+    const newLayers = textLayers.filter(l => l.id !== layerId);
+    setTextLayers(newLayers);
     
     if (selectedLayer?.id === layerId) {
       setSelectedLayer(null);
     }
+    
+    // Add to history
+    const newState: CanvasState = {
+      backgroundImage,
+      textLayers: newLayers,
+      canvasWidth: canvasDimensions.width,
+      canvasHeight: canvasDimensions.height,
+    };
+    addToHistory(newState);
   };
 
   return (
@@ -357,6 +501,14 @@ export default function Home() {
                   onReorderLayer={handleReorderLayer}
                   onDuplicateLayer={handleDuplicateLayer}
                   onDeleteLayer={handleDeleteLayer}
+                />
+                
+                <HistoryPanel
+                  canUndo={canUndo}
+                  canRedo={canRedo}
+                  onUndo={undo}
+                  onRedo={redo}
+                  historyLength={historyLength}
                 />
               </>
             )}
