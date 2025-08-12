@@ -8,6 +8,7 @@ import { TextToolsPanel } from '@/components/TextToolsPanel';
 import { LayersPanel } from '@/components/LayersPanel';
 import { HistoryPanel } from '@/components/HistoryPanel';
 import { AutosaveIndicator } from '@/components/AutosaveIndicator';
+import { ExportPanel } from '@/components/ExportPanel';
 import { TextLayer, CanvasState } from '@/types';
 import { useCanvasHistory } from '@/hooks/useCanvasHistory';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -86,6 +87,96 @@ export default function Home() {
       
       // Clear localStorage
       removeSavedState();
+    }
+  };
+  
+  const handleExport = async (): Promise<void> => {
+    if (!fabricCanvas || !backgroundImage) {
+      throw new Error('No canvas or background image available');
+    }
+    
+    try {
+      // Get original image dimensions
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = backgroundImage;
+      });
+      
+      const originalWidth = img.width;
+      const originalHeight = img.height;
+      
+      // Create a temporary canvas with original dimensions
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d')!;
+      tempCanvas.width = originalWidth;
+      tempCanvas.height = originalHeight;
+      
+      // Draw background image at full size
+      tempCtx.drawImage(img, 0, 0, originalWidth, originalHeight);
+      
+      // Calculate scale factor from display canvas to original size
+      const scaleX = originalWidth / canvasDimensions.width;
+      const scaleY = originalHeight / canvasDimensions.height;
+      
+      // Render each text layer at original scale
+      for (const layer of textLayers) {
+        tempCtx.save();
+        
+        // Set font properties
+        tempCtx.font = `${layer.fontWeight} ${layer.fontSize * scaleX}px ${layer.fontFamily}`;
+        tempCtx.fillStyle = layer.color;
+        tempCtx.globalAlpha = layer.opacity;
+        tempCtx.textAlign = layer.alignment as CanvasTextAlign;
+        tempCtx.textBaseline = 'top';
+        
+        // Calculate position at original scale
+        const scaledX = layer.x * scaleX;
+        const scaledY = layer.y * scaleY;
+        
+        // Apply transformations
+        tempCtx.translate(scaledX, scaledY);
+        if (layer.rotation) {
+          tempCtx.rotate((layer.rotation * Math.PI) / 180);
+        }
+        if (layer.scaleX !== 1 || layer.scaleY !== 1) {
+          tempCtx.scale(layer.scaleX, layer.scaleY);
+        }
+        
+        // Draw text with line breaks
+        const lines = layer.text.split('\n');
+        const lineHeight = layer.fontSize * layer.lineHeight * scaleX;
+        
+        lines.forEach((line, index) => {
+          tempCtx.fillText(line, 0, index * lineHeight);
+        });
+        
+        tempCtx.restore();
+      }
+      
+      // Convert to blob and download
+      const blob = await new Promise<Blob>((resolve) => {
+        tempCanvas.toBlob((blob) => {
+          resolve(blob!);
+        }, 'image/png', 1.0);
+      });
+      
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `adomate-design-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      // Clean up
+      tempCanvas.remove();
+    } catch (error) {
+      console.error('Export error:', error);
+      throw new Error('Failed to export image');
     }
   };
   
@@ -568,6 +659,11 @@ export default function Home() {
                 <AutosaveIndicator
                   onReset={handleResetDesign}
                   hasContent={!!backgroundImage || textLayers.length > 0}
+                />
+                
+                <ExportPanel
+                  onExport={handleExport}
+                  canExport={!!backgroundImage}
                 />
               </>
             )}
