@@ -1,7 +1,8 @@
 'use client';
 
-import { Type, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { Type, AlignLeft, AlignCenter, AlignRight, Loader2 } from 'lucide-react';
 import { TextLayer } from '@/types';
+import { useGoogleFonts } from '@/hooks/useGoogleFonts';
 
 interface TextToolsPanelProps {
   selectedLayer: TextLayer | null;
@@ -14,10 +15,11 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
   onAddTextLayer,
   onUpdateTextLayer
 }) => {
+  const { fonts, loading: fontsLoading, loadFont } = useGoogleFonts();
 
   const basicFonts = [
     'Arial',
-    'Helvetica',
+    'Helvetica', 
     'Georgia',
     'Times New Roman',
     'Courier New',
@@ -25,6 +27,7 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
     'Trebuchet MS',
     'Impact',
   ];
+
 
   const fontWeights = [
     { value: 'normal', label: 'Normal' },
@@ -42,6 +45,10 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
 
   const handlePropertyChange = (property: keyof TextLayer, value: string | number) => {
     if (selectedLayer) {
+      // If changing font family and it's a Google Font, load it
+      if (property === 'fontFamily' && typeof value === 'string' && !basicFonts.includes(value)) {
+        loadFont(value, selectedLayer.fontWeight);
+      }
       onUpdateTextLayer(selectedLayer.id, { [property]: value });
     }
   };
@@ -80,17 +87,30 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
 
           {/* Font Family */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
               Font Family
+              {fontsLoading && <Loader2 className="w-4 h-4 animate-spin" />}
             </label>
             <select
               value={selectedLayer.fontFamily}
               onChange={(e) => handlePropertyChange('fontFamily', e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md"
+              disabled={fontsLoading}
             >
-              {basicFonts.map(font => (
-                <option key={font} value={font}>{font}</option>
-              ))}
+              <optgroup label="System Fonts">
+                {basicFonts.map(font => (
+                  <option key={font} value={font}>{font}</option>
+                ))}
+              </optgroup>
+              {!fontsLoading && fonts.length > 0 && (
+                <optgroup label="Google Fonts">
+                  {fonts.slice(0, 50).map(font => (
+                    <option key={font.family} value={font.family} style={{ fontFamily: font.family }}>
+                      {font.family}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
 
