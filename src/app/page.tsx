@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-// @ts-ignore
+// @ts-expect-error Fabric.js v6 import issue - will be resolved at runtime
 import { fabric } from 'fabric';
 import { ImageUpload } from '@/components/ImageUpload';
 import { CanvasEditor } from '@/components/CanvasEditor';
