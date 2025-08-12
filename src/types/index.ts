@@ -13,6 +13,7 @@ export interface TextLayer {
   scaleX: number;
   scaleY: number;
   zIndex: number;
+  lineHeight: number;
 }
 
 export interface CanvasState {

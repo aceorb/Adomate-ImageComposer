@@ -79,10 +79,13 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
             <textarea
               value={selectedLayer.text}
               onChange={handleTextChange}
-              placeholder="Enter your text..."
-              className="w-full p-2 border border-gray-300 rounded-md resize-none"
-              rows={3}
+              placeholder="Enter your text...\nPress Enter for new line"
+              className="w-full p-2 border border-gray-300 rounded-md resize-none font-mono"
+              rows={4}
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Use Enter for line breaks. Text will wrap automatically on canvas.
+            </p>
           </div>
 
           {/* Font Family */}
@@ -205,6 +208,22 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
               step="0.1"
               value={selectedLayer.opacity}
               onChange={(e) => handlePropertyChange('opacity', parseFloat(e.target.value))}
+              className="w-full"
+            />
+          </div>
+
+          {/* Line Height */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Line Height: {selectedLayer.lineHeight.toFixed(1)}
+            </label>
+            <input
+              type="range"
+              min="0.8"
+              max="2.5"
+              step="0.1"
+              value={selectedLayer.lineHeight}
+              onChange={(e) => handlePropertyChange('lineHeight', parseFloat(e.target.value))}
               className="w-full"
             />
           </div>

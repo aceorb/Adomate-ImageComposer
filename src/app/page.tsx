@@ -137,7 +137,8 @@ export default function Home() {
       rotation: 0,
       scaleX: 1,
       scaleY: 1,
-      zIndex: textLayers.length
+      zIndex: textLayers.length,
+      lineHeight: 1.2
     };
     
     const fabricText = new Textbox(newLayer.text, {
@@ -151,6 +152,12 @@ export default function Home() {
       textAlign: newLayer.alignment,
       width: 200,
       splitByGrapheme: false,
+      // Multi-line text support
+      editable: true,
+      editingBorderColor: '#2563eb',
+      cursorColor: '#2563eb',
+      cursorWidth: 2,
+      lineHeight: newLayer.lineHeight,
       // Transform controls
       hasControls: true,
       hasBorders: true,
@@ -190,6 +197,7 @@ export default function Home() {
         if (updates.color !== undefined) fabricObject.set('fill', updates.color);
         if (updates.opacity !== undefined) fabricObject.set('opacity', updates.opacity);
         if (updates.alignment !== undefined) fabricObject.set('textAlign', updates.alignment);
+        if (updates.lineHeight !== undefined) fabricObject.set('lineHeight', updates.lineHeight);
         
         fabricCanvas.renderAll();
       }
