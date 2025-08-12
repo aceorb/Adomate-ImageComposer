@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Canvas, FabricImage } from 'fabric';
+import { fabric } from 'fabric';
 
 interface CanvasEditorProps {
   backgroundImage: string | null;
   canvasWidth: number;
   canvasHeight: number;
-  onCanvasReady?: (canvas: Canvas) => void;
+  onCanvasReady?: (canvas: fabric.Canvas) => void;
 }
 
 export const CanvasEditor: React.FC<CanvasEditorProps> = ({
@@ -17,14 +17,14 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
   onCanvasReady
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fabricCanvasRef = useRef<Canvas | null>(null);
+  const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (!canvasRef.current) return;
 
     // Initialize Fabric.js canvas
-    const canvas = new Canvas(canvasRef.current, {
+    const canvas = new fabric.Canvas(canvasRef.current, {
       width: canvasWidth,
       height: canvasHeight,
       backgroundColor: 'transparent',
@@ -48,7 +48,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
     setIsLoading(true);
     
     // Load background image
-    FabricImage.fromURL(backgroundImage).then((img) => {
+    fabric.Image.fromURL(backgroundImage, (img) => {
       if (!fabricCanvasRef.current) return;
       
       // Scale image to fit canvas while maintaining aspect ratio

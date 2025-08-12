@@ -1,16 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Canvas, Textbox } from 'fabric';
+import { fabric } from 'fabric';
 import { ImageUpload } from '@/components/ImageUpload';
 import { CanvasEditor } from '@/components/CanvasEditor';
 import { TextToolsPanel } from '@/components/TextToolsPanel';
+import { LayersPanel } from '@/components/LayersPanel';
 import { TextLayer } from '@/types';
 
 export default function Home() {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 800, height: 600 });
-  const [fabricCanvas, setFabricCanvas] = useState<Canvas | null>(null);
+  const [fabricCanvas, setFabricCanvas] = useState<fabric.Canvas | null>(null);
   const [textLayers, setTextLayers] = useState<TextLayer[]>([]);
   const [selectedLayer, setSelectedLayer] = useState<TextLayer | null>(null);
 
@@ -33,7 +34,7 @@ export default function Home() {
     setCanvasDimensions({ width: Math.round(canvasWidth), height: Math.round(canvasHeight) });
   };
 
-  const handleCanvasReady = (canvas: Canvas) => {
+  const handleCanvasReady = (canvas: fabric.Canvas) => {
     setFabricCanvas(canvas);
     
     // Handle object selection
@@ -141,7 +142,7 @@ export default function Home() {
       lineHeight: 1.2
     };
     
-    const fabricText = new Textbox(newLayer.text, {
+    const fabricText = new fabric.Textbox(newLayer.text, {
       left: newLayer.x,
       top: newLayer.y,
       fontSize: newLayer.fontSize,
@@ -188,7 +189,7 @@ export default function Home() {
     
     // Update fabric object
     if (fabricCanvas) {
-      const fabricObject = fabricCanvas.getObjects().find(obj => (obj as any).id === id) as Textbox;
+      const fabricObject = fabricCanvas.getObjects().find(obj => (obj as any).id === id) as fabric.Textbox;
       if (fabricObject) {
         if (updates.text !== undefined) fabricObject.set('text', updates.text);
         if (updates.fontSize !== undefined) fabricObject.set('fontSize', updates.fontSize);
@@ -206,6 +207,119 @@ export default function Home() {
     // Update selected layer if it's the one being updated
     if (selectedLayer?.id === id) {
       setSelectedLayer(prev => prev ? { ...prev, ...updates } : null);
+    }
+  };
+  
+  const handleSelectLayer = (layer: TextLayer) => {
+    setSelectedLayer(layer);
+    if (fabricCanvas) {
+      const fabricObject = fabricCanvas.getObjects().find(obj => (obj as any).id === layer.id);
+      if (fabricObject) {
+        fabricCanvas.setActiveObject(fabricObject);
+        fabricCanvas.requestRenderAll();
+      }
+    }
+  };
+  
+  const handleReorderLayer = (layerId: string, direction: 'up' | 'down') => {
+    const layerIndex = textLayers.findIndex(l => l.id === layerId);
+    if (layerIndex === -1) return;
+    
+    const newLayers = [...textLayers];
+    const [movedLayer] = newLayers.splice(layerIndex, 1);
+    
+    if (direction === 'up' && layerIndex < textLayers.length - 1) {
+      newLayers.splice(layerIndex + 1, 0, { ...movedLayer, zIndex: movedLayer.zIndex + 1 });
+      // Update other layer's zIndex
+      newLayers[layerIndex].zIndex = movedLayer.zIndex;
+    } else if (direction === 'down' && layerIndex > 0) {
+      newLayers.splice(layerIndex - 1, 0, { ...movedLayer, zIndex: movedLayer.zIndex - 1 });
+      // Update other layer's zIndex  
+      newLayers[layerIndex].zIndex = movedLayer.zIndex;
+    } else {
+      newLayers.splice(layerIndex, 0, movedLayer);
+      return;
+    }
+    
+    setTextLayers(newLayers);
+    
+    // Update fabric canvas object order
+    if (fabricCanvas) {
+      const fabricObject = fabricCanvas.getObjects().find(obj => (obj as any).id === layerId);
+      if (fabricObject) {
+        if (direction === 'up') {
+          fabricCanvas.bringForward(fabricObject);
+        } else {
+          fabricCanvas.sendBackwards(fabricObject);
+        }
+        fabricCanvas.requestRenderAll();
+      }
+    }
+  };
+  
+  const handleDuplicateLayer = (layerId: string) => {
+    const layer = textLayers.find(l => l.id === layerId);
+    if (!layer || !fabricCanvas) return;
+    
+    const duplicatedLayer: TextLayer = {
+      ...layer,
+      id: `text-${Date.now()}`,
+      x: layer.x + 20,
+      y: layer.y + 20,
+      zIndex: textLayers.length
+    };
+    
+    const fabricText = new fabric.Textbox(duplicatedLayer.text, {
+      left: duplicatedLayer.x,
+      top: duplicatedLayer.y,
+      fontSize: duplicatedLayer.fontSize,
+      fontFamily: duplicatedLayer.fontFamily,
+      fontWeight: duplicatedLayer.fontWeight,
+      fill: duplicatedLayer.color,
+      opacity: duplicatedLayer.opacity,
+      textAlign: duplicatedLayer.alignment,
+      width: 200,
+      splitByGrapheme: false,
+      // Multi-line text support
+      editable: true,
+      editingBorderColor: '#2563eb',
+      cursorColor: '#2563eb',
+      cursorWidth: 2,
+      lineHeight: duplicatedLayer.lineHeight,
+      // Transform controls
+      hasControls: true,
+      hasBorders: true,
+      cornerSize: 12,
+      cornerColor: '#2563eb',
+      cornerStyle: 'circle',
+      borderColor: '#2563eb',
+      borderDashArray: [5, 5],
+      transparentCorners: false,
+      rotatingPointOffset: 20,
+    });
+    
+    (fabricText as any).id = duplicatedLayer.id;
+    fabricCanvas.add(fabricText);
+    fabricCanvas.setActiveObject(fabricText);
+    fabricCanvas.requestRenderAll();
+    
+    setTextLayers(prev => [...prev, duplicatedLayer]);
+    setSelectedLayer(duplicatedLayer);
+  };
+  
+  const handleDeleteLayer = (layerId: string) => {
+    if (fabricCanvas) {
+      const fabricObject = fabricCanvas.getObjects().find(obj => (obj as any).id === layerId);
+      if (fabricObject) {
+        fabricCanvas.remove(fabricObject);
+        fabricCanvas.requestRenderAll();
+      }
+    }
+    
+    setTextLayers(prev => prev.filter(l => l.id !== layerId));
+    
+    if (selectedLayer?.id === layerId) {
+      setSelectedLayer(null);
     }
   };
 
@@ -229,11 +343,22 @@ export default function Home() {
             </div>
             
             {backgroundImage && (
-              <TextToolsPanel
-                selectedLayer={selectedLayer}
-                onAddTextLayer={handleAddTextLayer}
-                onUpdateTextLayer={handleUpdateTextLayer}
-              />
+              <>
+                <TextToolsPanel
+                  selectedLayer={selectedLayer}
+                  onAddTextLayer={handleAddTextLayer}
+                  onUpdateTextLayer={handleUpdateTextLayer}
+                />
+                
+                <LayersPanel
+                  layers={textLayers}
+                  selectedLayer={selectedLayer}
+                  onSelectLayer={handleSelectLayer}
+                  onReorderLayer={handleReorderLayer}
+                  onDuplicateLayer={handleDuplicateLayer}
+                  onDeleteLayer={handleDeleteLayer}
+                />
+              </>
             )}
           </div>
 
