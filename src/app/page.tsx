@@ -56,6 +56,68 @@ export default function Home() {
     canvas.on('selection:cleared', () => {
       setSelectedLayer(null);
     });
+    
+    // Handle object modifications (drag, resize, rotate)
+    canvas.on('object:modified', (e) => {
+      const activeObject = e.target;
+      if (activeObject && activeObject.type === 'textbox') {
+        const layerId = (activeObject as any).id;
+        const layer = textLayers.find(l => l.id === layerId);
+        if (layer) {
+          const updates = {
+            x: activeObject.left || 0,
+            y: activeObject.top || 0,
+            rotation: activeObject.angle || 0,
+            scaleX: activeObject.scaleX || 1,
+            scaleY: activeObject.scaleY || 1,
+          };
+          setTextLayers(prev => 
+            prev.map(l => l.id === layerId ? { ...l, ...updates } : l)
+          );
+          if (selectedLayer?.id === layerId) {
+            setSelectedLayer(prev => prev ? { ...prev, ...updates } : null);
+          }
+        }
+      }
+    });
+    
+    // Keyboard controls for nudging
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!canvas.getActiveObject()) return;
+      
+      const activeObject = canvas.getActiveObject();
+      const step = e.shiftKey ? 10 : 1;
+      
+      switch (e.key) {
+        case 'ArrowUp':
+          e.preventDefault();
+          activeObject?.set('top', (activeObject.top || 0) - step);
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          activeObject?.set('top', (activeObject.top || 0) + step);
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          activeObject?.set('left', (activeObject.left || 0) - step);
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          activeObject?.set('left', (activeObject.left || 0) + step);
+          break;
+      }
+      
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        canvas.requestRenderAll();
+        canvas.fire('object:modified', { target: activeObject });
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   };
   
   const handleAddTextLayer = () => {
@@ -89,6 +151,16 @@ export default function Home() {
       textAlign: newLayer.alignment,
       width: 200,
       splitByGrapheme: false,
+      // Transform controls
+      hasControls: true,
+      hasBorders: true,
+      cornerSize: 12,
+      cornerColor: '#2563eb',
+      cornerStyle: 'circle',
+      borderColor: '#2563eb',
+      borderDashArray: [5, 5],
+      transparentCorners: false,
+      rotatingPointOffset: 20,
     });
     
     (fabricText as any).id = newLayer.id;

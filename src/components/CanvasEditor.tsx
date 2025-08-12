@@ -29,6 +29,9 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
       height: canvasHeight,
       backgroundColor: 'transparent',
       preserveObjectStacking: true,
+      // Snap and selection settings
+      snapAngle: 15,
+      snapThreshold: 10,
     });
 
     fabricCanvasRef.current = canvas;
