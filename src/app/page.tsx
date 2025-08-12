@@ -7,8 +7,10 @@ import { CanvasEditor } from '@/components/CanvasEditor';
 import { TextToolsPanel } from '@/components/TextToolsPanel';
 import { LayersPanel } from '@/components/LayersPanel';
 import { HistoryPanel } from '@/components/HistoryPanel';
+import { AutosaveIndicator } from '@/components/AutosaveIndicator';
 import { TextLayer, CanvasState } from '@/types';
 import { useCanvasHistory } from '@/hooks/useCanvasHistory';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 export default function Home() {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
@@ -34,6 +36,58 @@ export default function Home() {
     canRedo,
     historyLength,
   } = useCanvasHistory(initialState);
+  
+  // Autosave to localStorage
+  const [savedState, setSavedState, removeSavedState] = useLocalStorage<CanvasState | null>('adomate-design', null);
+  
+  // Auto-save current state every 2 seconds when there are changes
+  useEffect(() => {
+    if (backgroundImage || textLayers.length > 0) {
+      const currentState: CanvasState = {
+        backgroundImage,
+        textLayers,
+        canvasWidth: canvasDimensions.width,
+        canvasHeight: canvasDimensions.height,
+      };
+      
+      const timeoutId = setTimeout(() => {
+        setSavedState(currentState);
+      }, 2000);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [backgroundImage, textLayers, canvasDimensions, setSavedState]);
+  
+  // Load saved state on mount
+  useEffect(() => {
+    if (savedState && savedState.backgroundImage) {
+      setBackgroundImage(savedState.backgroundImage);
+      setCanvasDimensions({
+        width: savedState.canvasWidth,
+        height: savedState.canvasHeight,
+      });
+      setTextLayers(savedState.textLayers);
+    }
+  }, []);
+  
+  const handleResetDesign = () => {
+    if (confirm('Are you sure you want to reset the design? This will clear everything and cannot be undone.')) {
+      // Clear canvas
+      if (fabricCanvas) {
+        fabricCanvas.clear();
+        fabricCanvas.requestRenderAll();
+      }
+      
+      // Reset state
+      setBackgroundImage(null);
+      setTextLayers([]);
+      setSelectedLayer(null);
+      setCanvasDimensions({ width: 800, height: 600 });
+      
+      // Clear localStorage
+      removeSavedState();
+    }
+  };
   
   // Restore state when history changes (undo/redo)
   useEffect(() => {
@@ -509,6 +563,11 @@ export default function Home() {
                   onUndo={undo}
                   onRedo={redo}
                   historyLength={historyLength}
+                />
+                
+                <AutosaveIndicator
+                  onReset={handleResetDesign}
+                  hasContent={!!backgroundImage || textLayers.length > 0}
                 />
               </>
             )}
