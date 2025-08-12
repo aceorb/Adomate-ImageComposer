@@ -1,14 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { fabric } from 'fabric';
+import { Canvas, Textbox } from 'fabric';
 import { ImageUpload } from '@/components/ImageUpload';
 import { CanvasEditor } from '@/components/CanvasEditor';
+import { TextToolsPanel } from '@/components/TextToolsPanel';
+import { TextLayer } from '@/types';
 
 export default function Home() {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 800, height: 600 });
-  const [fabricCanvas, setFabricCanvas] = useState<fabric.Canvas | null>(null);
+  const [fabricCanvas, setFabricCanvas] = useState<Canvas | null>(null);
+  const [textLayers, setTextLayers] = useState<TextLayer[]>([]);
+  const [selectedLayer, setSelectedLayer] = useState<TextLayer | null>(null);
 
   const handleImageUpload = (imageUrl: string, width: number, height: number) => {
     setBackgroundImage(imageUrl);
@@ -29,8 +33,100 @@ export default function Home() {
     setCanvasDimensions({ width: Math.round(canvasWidth), height: Math.round(canvasHeight) });
   };
 
-  const handleCanvasReady = (canvas: fabric.Canvas) => {
+  const handleCanvasReady = (canvas: Canvas) => {
     setFabricCanvas(canvas);
+    
+    // Handle object selection
+    canvas.on('selection:created', (e) => {
+      const activeObject = e.selected?.[0];
+      if (activeObject && activeObject.type === 'textbox') {
+        const layer = textLayers.find(l => l.id === (activeObject as any).id);
+        if (layer) setSelectedLayer(layer);
+      }
+    });
+    
+    canvas.on('selection:updated', (e) => {
+      const activeObject = e.selected?.[0];
+      if (activeObject && activeObject.type === 'textbox') {
+        const layer = textLayers.find(l => l.id === (activeObject as any).id);
+        if (layer) setSelectedLayer(layer);
+      }
+    });
+    
+    canvas.on('selection:cleared', () => {
+      setSelectedLayer(null);
+    });
+  };
+  
+  const handleAddTextLayer = () => {
+    if (!fabricCanvas) return;
+    
+    const newLayer: TextLayer = {
+      id: `text-${Date.now()}`,
+      text: 'New Text',
+      x: canvasDimensions.width / 2,
+      y: canvasDimensions.height / 2,
+      fontSize: 32,
+      fontFamily: 'Arial',
+      fontWeight: 'normal',
+      color: '#000000',
+      opacity: 1,
+      alignment: 'left',
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: textLayers.length
+    };
+    
+    const fabricText = new Textbox(newLayer.text, {
+      left: newLayer.x,
+      top: newLayer.y,
+      fontSize: newLayer.fontSize,
+      fontFamily: newLayer.fontFamily,
+      fontWeight: newLayer.fontWeight,
+      fill: newLayer.color,
+      opacity: newLayer.opacity,
+      textAlign: newLayer.alignment,
+      width: 200,
+      splitByGrapheme: false,
+    });
+    
+    (fabricText as any).id = newLayer.id;
+    fabricCanvas.add(fabricText);
+    fabricCanvas.setActiveObject(fabricText);
+    fabricCanvas.renderAll();
+    
+    setTextLayers(prev => [...prev, newLayer]);
+    setSelectedLayer(newLayer);
+  };
+  
+  const handleUpdateTextLayer = (id: string, updates: Partial<TextLayer>) => {
+    setTextLayers(prev => 
+      prev.map(layer => 
+        layer.id === id ? { ...layer, ...updates } : layer
+      )
+    );
+    
+    // Update fabric object
+    if (fabricCanvas) {
+      const fabricObject = fabricCanvas.getObjects().find(obj => (obj as any).id === id) as Textbox;
+      if (fabricObject) {
+        if (updates.text !== undefined) fabricObject.set('text', updates.text);
+        if (updates.fontSize !== undefined) fabricObject.set('fontSize', updates.fontSize);
+        if (updates.fontFamily !== undefined) fabricObject.set('fontFamily', updates.fontFamily);
+        if (updates.fontWeight !== undefined) fabricObject.set('fontWeight', updates.fontWeight);
+        if (updates.color !== undefined) fabricObject.set('fill', updates.color);
+        if (updates.opacity !== undefined) fabricObject.set('opacity', updates.opacity);
+        if (updates.alignment !== undefined) fabricObject.set('textAlign', updates.alignment);
+        
+        fabricCanvas.renderAll();
+      }
+    }
+    
+    // Update selected layer if it's the one being updated
+    if (selectedLayer?.id === id) {
+      setSelectedLayer(prev => prev ? { ...prev, ...updates } : null);
+    }
   };
 
   return (
@@ -53,12 +149,11 @@ export default function Home() {
             </div>
             
             {backgroundImage && (
-              <div className="bg-white rounded-lg p-4 shadow-sm">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Text Tools</h2>
-                <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors">
-                  Add Text Layer
-                </button>
-              </div>
+              <TextToolsPanel
+                selectedLayer={selectedLayer}
+                onAddTextLayer={handleAddTextLayer}
+                onUpdateTextLayer={handleUpdateTextLayer}
+              />
             )}
           </div>
 
