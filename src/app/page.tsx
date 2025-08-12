@@ -236,6 +236,7 @@ export default function Home() {
           cursorColor: '#2563eb',
           cursorWidth: 2,
           lineHeight: layer.lineHeight,
+          charSpacing: layer.letterSpacing || 0,
           hasControls: true,
           hasBorders: true,
           cornerSize: 12,
@@ -421,7 +422,8 @@ export default function Home() {
       scaleX: 1,
       scaleY: 1,
       zIndex: textLayers.length,
-      lineHeight: 1.2
+      lineHeight: 1.2,
+      letterSpacing: 0
     };
     
     const fabricText = new fabric.Textbox(newLayer.text, {
@@ -441,6 +443,7 @@ export default function Home() {
       cursorColor: '#2563eb',
       cursorWidth: 2,
       lineHeight: newLayer.lineHeight,
+      charSpacing: newLayer.letterSpacing || 0,
       // Transform controls
       hasControls: true,
       hasBorders: true,
@@ -494,6 +497,14 @@ export default function Home() {
         if (updates.opacity !== undefined) fabricObject.set('opacity', updates.opacity);
         if (updates.alignment !== undefined) fabricObject.set('textAlign', updates.alignment);
         if (updates.lineHeight !== undefined) fabricObject.set('lineHeight', updates.lineHeight);
+        if (updates.letterSpacing !== undefined) fabricObject.set('charSpacing', updates.letterSpacing);
+        if (updates.shadow !== undefined) {
+          if (updates.shadow) {
+            fabricObject.set('shadow', `${updates.shadow.offsetX}px ${updates.shadow.offsetY}px ${updates.shadow.blur}px ${updates.shadow.color}`);
+          } else {
+            fabricObject.set('shadow', null);
+          }
+        }
         
         fabricCanvas.renderAll();
       }
@@ -581,6 +592,7 @@ export default function Home() {
       cursorColor: '#2563eb',
       cursorWidth: 2,
       lineHeight: duplicatedLayer.lineHeight,
+      charSpacing: duplicatedLayer.letterSpacing || 0,
       // Transform controls
       hasControls: true,
       hasBorders: true,

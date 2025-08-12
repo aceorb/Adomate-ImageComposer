@@ -14,6 +14,14 @@ export interface TextLayer {
   scaleY: number;
   zIndex: number;
   lineHeight: number;
+  // Bonus features
+  shadow?: {
+    color: string;
+    blur: number;
+    offsetX: number;
+    offsetY: number;
+  };
+  letterSpacing?: number;
 }
 
 export interface CanvasState {

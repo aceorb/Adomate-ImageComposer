@@ -1,6 +1,8 @@
 'use client';
 
-import { Type, AlignLeft, AlignCenter, AlignRight, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+
+import { Type, AlignLeft, AlignCenter, AlignRight, Loader2, ChevronDown, ChevronRight, Zap } from 'lucide-react';
 import { TextLayer } from '@/types';
 import { useGoogleFonts } from '@/hooks/useGoogleFonts';
 
@@ -16,6 +18,7 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
   onUpdateTextLayer
 }) => {
   const { fonts, loading: fontsLoading, loadFont } = useGoogleFonts();
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const basicFonts = [
     'Arial',
@@ -227,6 +230,139 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
               className="w-full"
             />
           </div>
+
+          {/* Advanced Features Toggle */}
+          <div>
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="w-full flex items-center justify-between py-2 px-3 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-purple-600" />
+                <span className="text-sm font-medium text-gray-700">Advanced Features</span>
+              </div>
+              {showAdvanced ? (
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-gray-400" />
+              )}
+            </button>
+          </div>
+
+          {/* Advanced Features Content */}
+          {showAdvanced && (
+            <>
+              {/* Letter Spacing */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Letter Spacing: {(selectedLayer.letterSpacing || 0).toFixed(1)}px
+                </label>
+                <input
+                  type="range"
+                  min="-5"
+                  max="20"
+                  step="0.5"
+                  value={selectedLayer.letterSpacing || 0}
+                  onChange={(e) => handlePropertyChange('letterSpacing', parseFloat(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Text Shadow */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Text Shadow
+                </label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!!selectedLayer.shadow}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          handlePropertyChange('shadow', {
+                            color: '#000000',
+                            blur: 4,
+                            offsetX: 2,
+                            offsetY: 2,
+                          });
+                        } else {
+                          handlePropertyChange('shadow', undefined);
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-sm text-gray-600">Enable shadow</span>
+                  </div>
+                  
+                  {selectedLayer.shadow && (
+                    <div className="pl-6 space-y-2">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Shadow Color</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="color"
+                            value={selectedLayer.shadow.color}
+                            onChange={(e) => handlePropertyChange('shadow', { ...selectedLayer.shadow, color: e.target.value })}
+                            className="w-8 h-6 border border-gray-300 rounded cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={selectedLayer.shadow.color}
+                            onChange={(e) => handlePropertyChange('shadow', { ...selectedLayer.shadow, color: e.target.value })}
+                            className="flex-1 text-xs p-1 border border-gray-300 rounded font-mono"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Blur: {selectedLayer.shadow.blur}px
+                        </label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="20"
+                          value={selectedLayer.shadow.blur}
+                          onChange={(e) => handlePropertyChange('shadow', { ...selectedLayer.shadow, blur: parseInt(e.target.value) })}
+                          className="w-full"
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">
+                            X: {selectedLayer.shadow.offsetX}px
+                          </label>
+                          <input
+                            type="range"
+                            min="-20"
+                            max="20"
+                            value={selectedLayer.shadow.offsetX}
+                            onChange={(e) => handlePropertyChange('shadow', { ...selectedLayer.shadow, offsetX: parseInt(e.target.value) })}
+                            className="w-full"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">
+                            Y: {selectedLayer.shadow.offsetY}px
+                          </label>
+                          <input
+                            type="range"
+                            min="-20"
+                            max="20"
+                            value={selectedLayer.shadow.offsetY}
+                            onChange={(e) => handlePropertyChange('shadow', { ...selectedLayer.shadow, offsetY: parseInt(e.target.value) })}
+                            className="w-full"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
