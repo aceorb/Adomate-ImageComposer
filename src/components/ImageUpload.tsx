@@ -12,21 +12,25 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({ onImageUpload, disable
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    
+    // Clear previous errors
+    setError(null);
     
     const file = files[0];
     
     // Validate file type
     if (!file.type.includes('image/png')) {
-      alert('Please upload a PNG file only.');
+      setError('Please upload a PNG file only.');
       return;
     }
 
     // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be less than 10MB.');
+      setError('File size must be less than 10MB.');
       return;
     }
 
@@ -40,13 +44,13 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({ onImageUpload, disable
         setUploading(false);
       };
       img.onerror = () => {
-        alert('Error loading image. Please try a different file.');
+        setError('Error loading image. Please try a different file.');
         setUploading(false);
       };
       img.src = e.target?.result as string;
     };
     reader.onerror = () => {
-      alert('Error reading file. Please try again.');
+      setError('Error reading file. Please try again.');
       setUploading(false);
     };
     reader.readAsDataURL(file);
@@ -128,6 +132,12 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({ onImageUpload, disable
           <p className="text-xs text-gray-500 mt-1">
             Drag and drop or click to select • PNG only • Max 10MB
           </p>
+          
+          {error && (
+            <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-xs text-red-600">{error}</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

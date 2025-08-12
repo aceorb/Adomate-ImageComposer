@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+// @ts-ignore
 import { fabric } from 'fabric';
 import { ImageUpload } from '@/components/ImageUpload';
 import { CanvasEditor } from '@/components/CanvasEditor';
@@ -9,6 +10,7 @@ import { LayersPanel } from '@/components/LayersPanel';
 import { HistoryPanel } from '@/components/HistoryPanel';
 import { AutosaveIndicator } from '@/components/AutosaveIndicator';
 import { ExportPanel } from '@/components/ExportPanel';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { TextLayer, CanvasState } from '@/types';
 import { useCanvasHistory } from '@/hooks/useCanvasHistory';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -19,6 +21,8 @@ export default function Home() {
   const [fabricCanvas, setFabricCanvas] = useState<fabric.Canvas | null>(null);
   const [textLayers, setTextLayers] = useState<TextLayer[]>([]);
   const [selectedLayer, setSelectedLayer] = useState<TextLayer | null>(null);
+  const [appError, setAppError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   
   // History management
   const initialState: CanvasState = {
@@ -262,22 +266,33 @@ export default function Home() {
   }, [currentState, fabricCanvas]);
 
   const handleImageUpload = (imageUrl: string, width: number, height: number) => {
-    setBackgroundImage(imageUrl);
-    
-    // Calculate canvas dimensions to maintain aspect ratio
-    const maxWidth = 800;
-    const maxHeight = 600;
-    const aspectRatio = width / height;
-    
-    let canvasWidth = maxWidth;
-    let canvasHeight = maxWidth / aspectRatio;
-    
-    if (canvasHeight > maxHeight) {
-      canvasHeight = maxHeight;
-      canvasWidth = maxHeight * aspectRatio;
+    try {
+      setAppError(null);
+      setIsLoading(true);
+      
+      setBackgroundImage(imageUrl);
+      
+      // Calculate canvas dimensions to maintain aspect ratio
+      const maxWidth = 800;
+      const maxHeight = 600;
+      const aspectRatio = width / height;
+      
+      let canvasWidth = maxWidth;
+      let canvasHeight = maxWidth / aspectRatio;
+      
+      if (canvasHeight > maxHeight) {
+        canvasHeight = maxHeight;
+        canvasWidth = maxHeight * aspectRatio;
+      }
+      
+      setCanvasDimensions({ width: Math.round(canvasWidth), height: Math.round(canvasHeight) });
+      
+      setTimeout(() => setIsLoading(false), 500); // Brief loading for UX
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      setAppError('Failed to process uploaded image. Please try again.');
+      setIsLoading(false);
     }
-    
-    setCanvasDimensions({ width: Math.round(canvasWidth), height: Math.round(canvasHeight) });
   };
 
   const handleCanvasReady = (canvas: fabric.Canvas) => {
@@ -383,7 +398,13 @@ export default function Home() {
   };
   
   const handleAddTextLayer = () => {
-    if (!fabricCanvas) return;
+    if (!fabricCanvas) {
+      setAppError('Canvas not ready. Please wait and try again.');
+      return;
+    }
+    
+    try {
+      setAppError(null);
     
     const newLayer: TextLayer = {
       id: `text-${Date.now()}`,
@@ -448,6 +469,10 @@ export default function Home() {
       canvasHeight: canvasDimensions.height,
     };
     addToHistory(newState);
+    } catch (error) {
+      console.error('Error adding text layer:', error);
+      setAppError('Failed to add text layer. Please try again.');
+    }
   };
   
   const handleUpdateTextLayer = (id: string, updates: Partial<TextLayer>) => {
@@ -620,6 +645,26 @@ export default function Home() {
           <p className="text-gray-600">Upload a PNG image and add customizable text overlays</p>
         </header>
 
+        {/* Error Display */}
+        {appError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-3 h-3 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <p className="text-red-800 text-sm font-medium">{appError}</p>
+              <button
+                onClick={() => setAppError(null)}
+                className="ml-auto text-red-400 hover:text-red-600"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Left Sidebar - Tools */}
           <div className="lg:col-span-1 space-y-4">
@@ -691,6 +736,8 @@ export default function Home() {
           </div>
         </div>
       </div>
+      
+      <LoadingOverlay isVisible={isLoading} message="Processing..." />
     </div>
   );
 }
