@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-// @ts-expect-error Fabric.js v6 import issue - will be resolved at runtime
-import { fabric } from 'fabric';
+import { useRef, useEffect, useState } from 'react';
+import { Stage, Layer, Image as KonvaImage } from 'react-konva';
+import Konva from 'konva';
+import useImage from 'use-image';
 
 interface CanvasEditorProps {
   backgroundImage: string | null;
   canvasWidth: number;
   canvasHeight: number;
-  onCanvasReady?: (canvas: fabric.Canvas) => void;
+  onCanvasReady?: (stage: Konva.Stage) => void;
 }
 
 export const CanvasEditor: React.FC<CanvasEditorProps> = ({
@@ -17,62 +18,49 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
   canvasHeight,
   onCanvasReady
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
+  const stageRef = useRef<Konva.Stage>(null);
+  const [image] = useImage(backgroundImage || '');
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!canvasRef.current) return;
-
-    // Initialize Fabric.js canvas
-    const canvas = new fabric.Canvas(canvasRef.current, {
-      width: canvasWidth,
-      height: canvasHeight,
-      backgroundColor: 'transparent',
-      preserveObjectStacking: true,
-      // Snap and selection settings
-      snapAngle: 15,
-      snapThreshold: 10,
-    });
-
-    fabricCanvasRef.current = canvas;
-    onCanvasReady?.(canvas);
-
-    return () => {
-      canvas.dispose();
-    };
-  }, [canvasWidth, canvasHeight, onCanvasReady]);
+    if (stageRef.current && onCanvasReady) {
+      onCanvasReady(stageRef.current);
+    }
+  }, [onCanvasReady]);
 
   useEffect(() => {
-    if (!fabricCanvasRef.current || !backgroundImage) return;
+    if (backgroundImage) {
+      setIsLoading(true);
+    }
+  }, [backgroundImage]);
 
-    setIsLoading(true);
-    
-    // Load background image
-    fabric.Image.fromURL(backgroundImage, (img) => {
-      if (!fabricCanvasRef.current) return;
-      
-      // Scale image to fit canvas while maintaining aspect ratio
-      const canvas = fabricCanvasRef.current;
-      const scaleX = canvasWidth / img.width!;
-      const scaleY = canvasHeight / img.height!;
-      const scale = Math.min(scaleX, scaleY);
-      
-      img.scale(scale);
-      img.set({
-        left: (canvasWidth - img.getScaledWidth()) / 2,
-        top: (canvasHeight - img.getScaledHeight()) / 2,
-        selectable: false,
-        evented: false,
-        hoverCursor: 'default',
-        moveCursor: 'default',
-      });
-
-      // Set as background
-      canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+  useEffect(() => {
+    if (image) {
       setIsLoading(false);
-    });
-  }, [backgroundImage, canvasWidth, canvasHeight]);
+    }
+  }, [image]);
+
+  const getImageProps = () => {
+    if (!image) return {};
+    
+    // Calculate scale to fit canvas while maintaining aspect ratio
+    const scaleX = canvasWidth / image.width;
+    const scaleY = canvasHeight / image.height;
+    const scale = Math.min(scaleX, scaleY);
+    
+    const scaledWidth = image.width * scale;
+    const scaledHeight = image.height * scale;
+    
+    return {
+      image,
+      width: image.width,
+      height: image.height,
+      scaleX: scale,
+      scaleY: scale,
+      x: (canvasWidth - scaledWidth) / 2,
+      y: (canvasHeight - scaledHeight) / 2,
+    };
+  };
 
   return (
     <div className="relative border border-gray-300 rounded-lg overflow-hidden bg-white">
@@ -81,14 +69,16 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
       )}
-      <canvas
-        ref={canvasRef}
+      <Stage
+        ref={stageRef}
+        width={canvasWidth}
+        height={canvasHeight}
         className="block max-w-full max-h-full"
-        style={{
-          width: canvasWidth,
-          height: canvasHeight,
-        }}
-      />
+      >
+        <Layer>
+          {image && <KonvaImage {...getImageProps()} />}
+        </Layer>
+      </Stage>
     </div>
   );
 };

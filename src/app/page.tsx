@@ -1,10 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-// @ts-expect-error Fabric.js v6 import issue - will be resolved at runtime
-import { fabric } from 'fabric';
+import dynamic from 'next/dynamic';
+
+const CanvasEditor = dynamic(() => import('@/components/CanvasEditor').then(mod => ({ default: mod.CanvasEditor })), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-96"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>
+});
+
 import { ImageUpload } from '@/components/ImageUpload';
-import { CanvasEditor } from '@/components/CanvasEditor';
 import { TextToolsPanel } from '@/components/TextToolsPanel';
 import { LayersPanel } from '@/components/LayersPanel';
 import { HistoryPanel } from '@/components/HistoryPanel';
@@ -18,7 +22,7 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 export default function Home() {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 800, height: 600 });
-  const [fabricCanvas, setFabricCanvas] = useState<fabric.Canvas | null>(null);
+  const [konvaStage, setKonvaStage] = useState<any>(null);
   const [textLayers, setTextLayers] = useState<TextLayer[]>([]);
   const [selectedLayer, setSelectedLayer] = useState<TextLayer | null>(null);
   const [appError, setAppError] = useState<string | null>(null);
@@ -77,11 +81,7 @@ export default function Home() {
   
   const handleResetDesign = () => {
     if (confirm('Are you sure you want to reset the design? This will clear everything and cannot be undone.')) {
-      // Clear canvas
-      if (fabricCanvas) {
-        fabricCanvas.clear();
-        fabricCanvas.requestRenderAll();
-      }
+      // TODO: Clear Konva stage
       
       // Reset state
       setBackgroundImage(null);
@@ -95,7 +95,7 @@ export default function Home() {
   };
   
   const handleExport = async (): Promise<void> => {
-    if (!fabricCanvas || !backgroundImage) {
+    if (!konvaStage || !backgroundImage) {
       throw new Error('No canvas or background image available');
     }
     
@@ -184,87 +184,19 @@ export default function Home() {
     }
   };
   
+  // TODO: Implement Konva.js history restoration
   // Restore state when history changes (undo/redo)
-  useEffect(() => {
-    if (currentState && fabricCanvas) {
-      // Update background image if different
-      if (currentState.backgroundImage !== backgroundImage) {
-        setBackgroundImage(currentState.backgroundImage);
-      }
-      
-      // Clear current canvas objects
-      fabricCanvas.clear();
-      
-      // Re-add background image if exists
-      if (currentState.backgroundImage) {
-        fabric.Image.fromURL(currentState.backgroundImage, (img) => {
-          if (!fabricCanvas) return;
-          
-          const scaleX = currentState.canvasWidth / img.width!;
-          const scaleY = currentState.canvasHeight / img.height!;
-          const scale = Math.min(scaleX, scaleY);
-          
-          img.scale(scale);
-          img.set({
-            left: (currentState.canvasWidth - img.getScaledWidth()) / 2,
-            top: (currentState.canvasHeight - img.getScaledHeight()) / 2,
-            selectable: false,
-            evented: false,
-            hoverCursor: 'default',
-            moveCursor: 'default',
-          });
-          
-          fabricCanvas.setBackgroundImage(img, fabricCanvas.renderAll.bind(fabricCanvas));
-        });
-      }
-      
-      // Recreate text layers
-      currentState.textLayers.forEach(layer => {
-        const fabricText = new fabric.Textbox(layer.text, {
-          left: layer.x,
-          top: layer.y,
-          fontSize: layer.fontSize,
-          fontFamily: layer.fontFamily,
-          fontWeight: layer.fontWeight,
-          fill: layer.color,
-          opacity: layer.opacity,
-          textAlign: layer.alignment,
-          width: 200,
-          splitByGrapheme: false,
-          editable: true,
-          editingBorderColor: '#2563eb',
-          cursorColor: '#2563eb',
-          cursorWidth: 2,
-          lineHeight: layer.lineHeight,
-          charSpacing: layer.letterSpacing || 0,
-          hasControls: true,
-          hasBorders: true,
-          cornerSize: 12,
-          cornerColor: '#2563eb',
-          cornerStyle: 'circle',
-          borderColor: '#2563eb',
-          borderDashArray: [5, 5],
-          transparentCorners: false,
-          rotatingPointOffset: 20,
-        });
-        
-        (fabricText as any).id = layer.id;
-        fabricCanvas.add(fabricText);
-      });
-      
-      fabricCanvas.requestRenderAll();
-      
-      // Update local state
-      setTextLayers(currentState.textLayers);
-      setCanvasDimensions({ 
-        width: currentState.canvasWidth, 
-        height: currentState.canvasHeight 
-      });
-      
-      // Clear selection
-      setSelectedLayer(null);
-    }
-  }, [currentState, fabricCanvas]);
+  // useEffect(() => {
+  //   if (currentState && konvaStage) {
+  //     // Update background image if different
+  //     if (currentState.backgroundImage !== backgroundImage) {
+  //       setBackgroundImage(currentState.backgroundImage);
+  //     }
+  //     
+  //     // Clear current canvas objects and recreate with Konva
+  //     // TODO: Implement with Konva Layer management
+  //   }
+  // }, [currentState, konvaStage]);
 
   const handleImageUpload = (imageUrl: string, width: number, height: number) => {
     try {
@@ -296,110 +228,18 @@ export default function Home() {
     }
   };
 
-  const handleCanvasReady = (canvas: fabric.Canvas) => {
-    setFabricCanvas(canvas);
+  const handleCanvasReady = (stage: any) => {
+    setKonvaStage(stage);
+    console.log('Konva stage ready:', stage);
     
-    // Handle object selection
-    canvas.on('selection:created', (e) => {
-      const activeObject = e.selected?.[0];
-      if (activeObject && activeObject.type === 'textbox') {
-        const layer = textLayers.find(l => l.id === (activeObject as any).id);
-        if (layer) setSelectedLayer(layer);
-      }
-    });
-    
-    canvas.on('selection:updated', (e) => {
-      const activeObject = e.selected?.[0];
-      if (activeObject && activeObject.type === 'textbox') {
-        const layer = textLayers.find(l => l.id === (activeObject as any).id);
-        if (layer) setSelectedLayer(layer);
-      }
-    });
-    
-    canvas.on('selection:cleared', () => {
-      setSelectedLayer(null);
-    });
-    
-    // Handle object modifications (drag, resize, rotate)
-    canvas.on('object:modified', (e) => {
-      const activeObject = e.target;
-      if (activeObject && activeObject.type === 'textbox') {
-        const layerId = (activeObject as any).id;
-        const layer = textLayers.find(l => l.id === layerId);
-        if (layer) {
-          const updates = {
-            x: activeObject.left || 0,
-            y: activeObject.top || 0,
-            rotation: activeObject.angle || 0,
-            scaleX: activeObject.scaleX || 1,
-            scaleY: activeObject.scaleY || 1,
-          };
-          setTextLayers(prev => 
-            prev.map(l => l.id === layerId ? { ...l, ...updates } : l)
-          );
-          if (selectedLayer?.id === layerId) {
-            setSelectedLayer(prev => prev ? { ...prev, ...updates } : null);
-          }
-        }
-      }
-    });
-    
-    // Keyboard controls for nudging and history
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // History shortcuts
-      if (e.ctrlKey || e.metaKey) {
-        if (e.key === 'z' && !e.shiftKey) {
-          e.preventDefault();
-          undo();
-          return;
-        }
-        if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
-          e.preventDefault();
-          redo();
-          return;
-        }
-      }
-      
-      // Nudging controls
-      if (!canvas.getActiveObject()) return;
-      
-      const activeObject = canvas.getActiveObject();
-      const step = e.shiftKey ? 10 : 1;
-      
-      switch (e.key) {
-        case 'ArrowUp':
-          e.preventDefault();
-          activeObject?.set('top', (activeObject.top || 0) - step);
-          break;
-        case 'ArrowDown':
-          e.preventDefault();
-          activeObject?.set('top', (activeObject.top || 0) + step);
-          break;
-        case 'ArrowLeft':
-          e.preventDefault();
-          activeObject?.set('left', (activeObject.left || 0) - step);
-          break;
-        case 'ArrowRight':
-          e.preventDefault();
-          activeObject?.set('left', (activeObject.left || 0) + step);
-          break;
-      }
-      
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        canvas.requestRenderAll();
-        canvas.fire('object:modified', { target: activeObject });
-      }
-    };
-    
-    document.addEventListener('keydown', handleKeyDown);
-    
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
+    // TODO: Implement Konva event handlers
+    // - Selection handling
+    // - Object modification tracking
+    // - Keyboard shortcuts
   };
   
   const handleAddTextLayer = () => {
-    if (!fabricCanvas) {
+    if (!konvaStage) {
       setAppError('Canvas not ready. Please wait and try again.');
       return;
     }
@@ -407,71 +247,37 @@ export default function Home() {
     try {
       setAppError(null);
     
-    const newLayer: TextLayer = {
-      id: `text-${Date.now()}`,
-      text: 'New Text',
-      x: canvasDimensions.width / 2,
-      y: canvasDimensions.height / 2,
-      fontSize: 32,
-      fontFamily: 'Arial',
-      fontWeight: 'normal',
-      color: '#000000',
-      opacity: 1,
-      alignment: 'left',
-      rotation: 0,
-      scaleX: 1,
-      scaleY: 1,
-      zIndex: textLayers.length,
-      lineHeight: 1.2,
-      letterSpacing: 0
-    };
-    
-    const fabricText = new fabric.Textbox(newLayer.text, {
-      left: newLayer.x,
-      top: newLayer.y,
-      fontSize: newLayer.fontSize,
-      fontFamily: newLayer.fontFamily,
-      fontWeight: newLayer.fontWeight,
-      fill: newLayer.color,
-      opacity: newLayer.opacity,
-      textAlign: newLayer.alignment,
-      width: 200,
-      splitByGrapheme: false,
-      // Multi-line text support
-      editable: true,
-      editingBorderColor: '#2563eb',
-      cursorColor: '#2563eb',
-      cursorWidth: 2,
-      lineHeight: newLayer.lineHeight,
-      charSpacing: newLayer.letterSpacing || 0,
-      // Transform controls
-      hasControls: true,
-      hasBorders: true,
-      cornerSize: 12,
-      cornerColor: '#2563eb',
-      cornerStyle: 'circle',
-      borderColor: '#2563eb',
-      borderDashArray: [5, 5],
-      transparentCorners: false,
-      rotatingPointOffset: 20,
-    });
-    
-    (fabricText as any).id = newLayer.id;
-    fabricCanvas.add(fabricText);
-    fabricCanvas.setActiveObject(fabricText);
-    fabricCanvas.renderAll();
-    
-    setTextLayers(prev => [...prev, newLayer]);
-    setSelectedLayer(newLayer);
-    
-    // Add to history
-    const newState: CanvasState = {
-      backgroundImage,
-      textLayers: [...textLayers, newLayer],
-      canvasWidth: canvasDimensions.width,
-      canvasHeight: canvasDimensions.height,
-    };
-    addToHistory(newState);
+      const newLayer: TextLayer = {
+        id: `text-${Date.now()}`,
+        text: 'New Text',
+        x: canvasDimensions.width / 2,
+        y: canvasDimensions.height / 2,
+        fontSize: 32,
+        fontFamily: 'Arial',
+        fontWeight: 'normal',
+        color: '#000000',
+        opacity: 1,
+        alignment: 'left',
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        zIndex: textLayers.length,
+        lineHeight: 1.2,
+        letterSpacing: 0
+      };
+      
+      // TODO: Add Konva Text node to stage
+      setTextLayers(prev => [...prev, newLayer]);
+      setSelectedLayer(newLayer);
+      
+      // Add to history
+      const newState: CanvasState = {
+        backgroundImage,
+        textLayers: [...textLayers, newLayer],
+        canvasWidth: canvasDimensions.width,
+        canvasHeight: canvasDimensions.height,
+      };
+      addToHistory(newState);
     } catch (error) {
       console.error('Error adding text layer:', error);
       setAppError('Failed to add text layer. Please try again.');
@@ -485,30 +291,7 @@ export default function Home() {
       )
     );
     
-    // Update fabric object
-    if (fabricCanvas) {
-      const fabricObject = fabricCanvas.getObjects().find(obj => (obj as any).id === id) as fabric.Textbox;
-      if (fabricObject) {
-        if (updates.text !== undefined) fabricObject.set('text', updates.text);
-        if (updates.fontSize !== undefined) fabricObject.set('fontSize', updates.fontSize);
-        if (updates.fontFamily !== undefined) fabricObject.set('fontFamily', updates.fontFamily);
-        if (updates.fontWeight !== undefined) fabricObject.set('fontWeight', updates.fontWeight);
-        if (updates.color !== undefined) fabricObject.set('fill', updates.color);
-        if (updates.opacity !== undefined) fabricObject.set('opacity', updates.opacity);
-        if (updates.alignment !== undefined) fabricObject.set('textAlign', updates.alignment);
-        if (updates.lineHeight !== undefined) fabricObject.set('lineHeight', updates.lineHeight);
-        if (updates.letterSpacing !== undefined) fabricObject.set('charSpacing', updates.letterSpacing);
-        if (updates.shadow !== undefined) {
-          if (updates.shadow) {
-            fabricObject.set('shadow', `${updates.shadow.offsetX}px ${updates.shadow.offsetY}px ${updates.shadow.blur}px ${updates.shadow.color}`);
-          } else {
-            fabricObject.set('shadow', null);
-          }
-        }
-        
-        fabricCanvas.renderAll();
-      }
-    }
+    // TODO: Update Konva Text node
     
     // Update selected layer if it's the one being updated
     if (selectedLayer?.id === id) {
@@ -518,135 +301,22 @@ export default function Home() {
   
   const handleSelectLayer = (layer: TextLayer) => {
     setSelectedLayer(layer);
-    if (fabricCanvas) {
-      const fabricObject = fabricCanvas.getObjects().find(obj => (obj as any).id === layer.id);
-      if (fabricObject) {
-        fabricCanvas.setActiveObject(fabricObject);
-        fabricCanvas.requestRenderAll();
-      }
-    }
+    // TODO: Select Konva Text node
   };
   
   const handleReorderLayer = (layerId: string, direction: 'up' | 'down') => {
-    const layerIndex = textLayers.findIndex(l => l.id === layerId);
-    if (layerIndex === -1) return;
-    
-    const newLayers = [...textLayers];
-    const [movedLayer] = newLayers.splice(layerIndex, 1);
-    
-    if (direction === 'up' && layerIndex < textLayers.length - 1) {
-      newLayers.splice(layerIndex + 1, 0, { ...movedLayer, zIndex: movedLayer.zIndex + 1 });
-      // Update other layer's zIndex
-      newLayers[layerIndex].zIndex = movedLayer.zIndex;
-    } else if (direction === 'down' && layerIndex > 0) {
-      newLayers.splice(layerIndex - 1, 0, { ...movedLayer, zIndex: movedLayer.zIndex - 1 });
-      // Update other layer's zIndex  
-      newLayers[layerIndex].zIndex = movedLayer.zIndex;
-    } else {
-      newLayers.splice(layerIndex, 0, movedLayer);
-      return;
-    }
-    
-    setTextLayers(newLayers);
-    
-    // Update fabric canvas object order
-    if (fabricCanvas) {
-      const fabricObject = fabricCanvas.getObjects().find(obj => (obj as any).id === layerId);
-      if (fabricObject) {
-        if (direction === 'up') {
-          fabricCanvas.bringForward(fabricObject);
-        } else {
-          fabricCanvas.sendBackwards(fabricObject);
-        }
-        fabricCanvas.requestRenderAll();
-      }
-    }
+    // TODO: Implement with Konva layer reordering
+    console.log('Reorder layer:', layerId, direction);
   };
   
   const handleDuplicateLayer = (layerId: string) => {
-    const layer = textLayers.find(l => l.id === layerId);
-    if (!layer || !fabricCanvas) return;
-    
-    const duplicatedLayer: TextLayer = {
-      ...layer,
-      id: `text-${Date.now()}`,
-      x: layer.x + 20,
-      y: layer.y + 20,
-      zIndex: textLayers.length
-    };
-    
-    const fabricText = new fabric.Textbox(duplicatedLayer.text, {
-      left: duplicatedLayer.x,
-      top: duplicatedLayer.y,
-      fontSize: duplicatedLayer.fontSize,
-      fontFamily: duplicatedLayer.fontFamily,
-      fontWeight: duplicatedLayer.fontWeight,
-      fill: duplicatedLayer.color,
-      opacity: duplicatedLayer.opacity,
-      textAlign: duplicatedLayer.alignment,
-      width: 200,
-      splitByGrapheme: false,
-      // Multi-line text support
-      editable: true,
-      editingBorderColor: '#2563eb',
-      cursorColor: '#2563eb',
-      cursorWidth: 2,
-      lineHeight: duplicatedLayer.lineHeight,
-      charSpacing: duplicatedLayer.letterSpacing || 0,
-      // Transform controls
-      hasControls: true,
-      hasBorders: true,
-      cornerSize: 12,
-      cornerColor: '#2563eb',
-      cornerStyle: 'circle',
-      borderColor: '#2563eb',
-      borderDashArray: [5, 5],
-      transparentCorners: false,
-      rotatingPointOffset: 20,
-    });
-    
-    (fabricText as any).id = duplicatedLayer.id;
-    fabricCanvas.add(fabricText);
-    fabricCanvas.setActiveObject(fabricText);
-    fabricCanvas.requestRenderAll();
-    
-    setTextLayers(prev => [...prev, duplicatedLayer]);
-    setSelectedLayer(duplicatedLayer);
-    
-    // Add to history
-    const newState: CanvasState = {
-      backgroundImage,
-      textLayers: [...textLayers, duplicatedLayer],
-      canvasWidth: canvasDimensions.width,
-      canvasHeight: canvasDimensions.height,
-    };
-    addToHistory(newState);
+    // TODO: Implement with Konva
+    console.log('Duplicate layer:', layerId);
   };
   
   const handleDeleteLayer = (layerId: string) => {
-    if (fabricCanvas) {
-      const fabricObject = fabricCanvas.getObjects().find(obj => (obj as any).id === layerId);
-      if (fabricObject) {
-        fabricCanvas.remove(fabricObject);
-        fabricCanvas.requestRenderAll();
-      }
-    }
-    
-    const newLayers = textLayers.filter(l => l.id !== layerId);
-    setTextLayers(newLayers);
-    
-    if (selectedLayer?.id === layerId) {
-      setSelectedLayer(null);
-    }
-    
-    // Add to history
-    const newState: CanvasState = {
-      backgroundImage,
-      textLayers: newLayers,
-      canvasWidth: canvasDimensions.width,
-      canvasHeight: canvasDimensions.height,
-    };
-    addToHistory(newState);
+    // TODO: Implement with Konva
+    console.log('Delete layer:', layerId);
   };
 
   return (
