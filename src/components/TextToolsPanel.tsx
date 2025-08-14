@@ -46,7 +46,7 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
     }
   };
 
-  const handlePropertyChange = (property: keyof TextLayer, value: string | number) => {
+  const handlePropertyChange = (property: keyof TextLayer, value: string | number | TextLayer['shadow']) => {
     if (selectedLayer) {
       // If changing font family and it's a Google Font, load it
       if (property === 'fontFamily' && typeof value === 'string' && !basicFonts.includes(value)) {
@@ -303,13 +303,23 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
                           <input
                             type="color"
                             value={selectedLayer.shadow.color}
-                            onChange={(e) => handlePropertyChange('shadow', { ...selectedLayer.shadow, color: e.target.value })}
+                            onChange={(e) => handlePropertyChange('shadow', { 
+                              color: e.target.value,
+                              blur: selectedLayer.shadow!.blur,
+                              offsetX: selectedLayer.shadow!.offsetX,
+                              offsetY: selectedLayer.shadow!.offsetY
+                            })}
                             className="w-8 h-6 border border-gray-300 rounded cursor-pointer"
                           />
                           <input
                             type="text"
                             value={selectedLayer.shadow.color}
-                            onChange={(e) => handlePropertyChange('shadow', { ...selectedLayer.shadow, color: e.target.value })}
+                            onChange={(e) => handlePropertyChange('shadow', { 
+                              color: e.target.value,
+                              blur: selectedLayer.shadow!.blur,
+                              offsetX: selectedLayer.shadow!.offsetX,
+                              offsetY: selectedLayer.shadow!.offsetY
+                            })}
                             className="flex-1 text-xs p-1 border border-gray-300 rounded font-mono"
                           />
                         </div>
@@ -324,7 +334,12 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
                           min="0"
                           max="20"
                           value={selectedLayer.shadow.blur}
-                          onChange={(e) => handlePropertyChange('shadow', { ...selectedLayer.shadow, blur: parseInt(e.target.value) })}
+                          onChange={(e) => handlePropertyChange('shadow', { 
+                            color: selectedLayer.shadow!.color,
+                            blur: parseInt(e.target.value),
+                            offsetX: selectedLayer.shadow!.offsetX,
+                            offsetY: selectedLayer.shadow!.offsetY
+                          })}
                           className="w-full"
                         />
                       </div>
@@ -339,7 +354,12 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
                             min="-20"
                             max="20"
                             value={selectedLayer.shadow.offsetX}
-                            onChange={(e) => handlePropertyChange('shadow', { ...selectedLayer.shadow, offsetX: parseInt(e.target.value) })}
+                            onChange={(e) => handlePropertyChange('shadow', { 
+                              color: selectedLayer.shadow!.color,
+                              blur: selectedLayer.shadow!.blur,
+                              offsetX: parseInt(e.target.value),
+                              offsetY: selectedLayer.shadow!.offsetY
+                            })}
                             className="w-full"
                           />
                         </div>
@@ -352,7 +372,12 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
                             min="-20"
                             max="20"
                             value={selectedLayer.shadow.offsetY}
-                            onChange={(e) => handlePropertyChange('shadow', { ...selectedLayer.shadow, offsetY: parseInt(e.target.value) })}
+                            onChange={(e) => handlePropertyChange('shadow', { 
+                              color: selectedLayer.shadow!.color,
+                              blur: selectedLayer.shadow!.blur,
+                              offsetX: selectedLayer.shadow!.offsetX,
+                              offsetY: parseInt(e.target.value)
+                            })}
                             className="w-full"
                           />
                         </div>

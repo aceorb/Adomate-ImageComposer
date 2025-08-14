@@ -83,13 +83,13 @@ export const ImageTextComposer: React.FC = () => {
       // Clear Konva stage
       if (konvaStage) {
         // Remove all text nodes from the stage
-        const allTextNodes = konvaStage.find('Text') as any[];
-        allTextNodes.forEach((node: any) => {
+        const allTextNodes = konvaStage.find('Text') as Konva.Text[];
+        allTextNodes.forEach((node) => {
           node.destroy();
         });
         
         // Redraw all layers to reflect changes
-        konvaStage.getLayers().forEach((layer: any) => {
+        konvaStage.getLayers().forEach((layer) => {
           layer.batchDraw();
         });
       }
@@ -225,25 +225,18 @@ export const ImageTextComposer: React.FC = () => {
     }
   };
 
-  const handleCanvasReady = (stage: any) => {
+  const handleCanvasReady = (stage: Konva.Stage) => {
     setKonvaStage(stage);
     console.log('Konva stage ready:', stage);
-    
-    // // Import Konva dynamically when needed
-    // import('konva').then((KonvaModule) => {
-    //   Konva = KonvaModule.default;
-    // });
-    
-    // Implement Konva event handlers
-    
+
     // 1. Selection handling - Click on empty canvas to deselect
-    stage.on('click tap', (e: any) => {
+    stage.on('click tap', (e) => {
       // If clicked on empty area (not a text node), deselect
       if (e.target === stage || e.target.getClassName() === 'Layer') {
         setSelectedLayer(null);
         // Remove selection styling from all text nodes
-        const allTextNodes = stage.find('Text') as any[];
-        allTextNodes.forEach((node: any) => {
+        const allTextNodes = stage.find('Text') as Konva.Text[];
+        allTextNodes.forEach((node) => {
           node.stroke('');
           node.strokeWidth(0);
         });
@@ -254,7 +247,7 @@ export const ImageTextComposer: React.FC = () => {
     // 2. Object modification tracking - Track drag operations for history
     let dragStartState: CanvasState | null = null;
     
-    stage.on('dragstart', (e: any) => {
+    stage.on('dragstart', (e) => {
       if (e.target.getClassName() === 'Text') {
         // Save state before drag for history
         dragStartState = {
@@ -266,7 +259,7 @@ export const ImageTextComposer: React.FC = () => {
       }
     });
     
-    stage.on('dragend', (e: any) => {
+    stage.on('dragend', (e) => {
       if (e.target.getClassName() === 'Text' && dragStartState) {
         // Add drag operation to history
         const currentCanvasState: CanvasState = {
@@ -599,7 +592,7 @@ export const ImageTextComposer: React.FC = () => {
     const isInputFocused = activeElement && (
       activeElement.tagName === 'INPUT' ||
       activeElement.tagName === 'TEXTAREA' ||
-      activeElement.contentEditable === 'true'
+      (activeElement as HTMLElement).contentEditable === 'true'
     );
 
     if (!isInputFocused) {
