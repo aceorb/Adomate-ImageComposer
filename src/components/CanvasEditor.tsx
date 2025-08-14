@@ -20,6 +20,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
   onCanvasReady
 }) => {
   const stageRef = useRef<Konva.Stage>(null);
+  const imageNodeRef = useRef<Konva.Image>(null);
   const [image] = useImage(backgroundImage || '');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -40,6 +41,14 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
       setIsLoading(false);
     }
   }, [image]);
+
+  // Ensure background image always stays at the bottom (zIndex 0)
+  useEffect(() => {
+    if (imageNodeRef.current) {
+      imageNodeRef.current.moveToBottom();
+      imageNodeRef.current.getLayer()?.batchDraw();
+    }
+  });
 
   const getImageProps = (): ImageConfig | null => {
     if (!image) return null;
@@ -79,7 +88,7 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
         <Layer>
           {(() => {
             const imageProps = getImageProps();
-            return imageProps && <KonvaImage {...imageProps} />;
+            return imageProps && <KonvaImage ref={imageNodeRef} {...imageProps} />;
           })()}
         </Layer>
       </Stage>

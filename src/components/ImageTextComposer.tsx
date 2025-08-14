@@ -14,6 +14,7 @@ export const ImageTextComposer: React.FC = () => {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 800, height: 600 });
   const [konvaStage, setKonvaStage] = useState<Konva.Stage | null>(null);
+  const [konvaTransformer, setKonvaTransformer] = useState<Konva.Transformer | null>(null);
   const [textLayers, setTextLayers] = useState<TextLayer[]>([]);
   const [selectedLayer, setSelectedLayer] = useState<TextLayer | null>(null);
   const [appError, setAppError] = useState<string | null>(null);
@@ -249,11 +250,32 @@ export const ImageTextComposer: React.FC = () => {
     setKonvaStage(stage);
     console.log('Konva stage ready:', stage);
 
+    // Create transformer for resizing and rotating text nodes
+    const transformer = new Konva.Transformer({
+      enabledAnchors: ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+      rotateAnchorOffset: 30,
+      borderStroke: '#0084ff',
+      borderStrokeWidth: 2,
+      anchorStroke: '#0084ff',
+      anchorStrokeWidth: 2,
+      anchorSize: 8,
+      keepRatio: false, // Allow non-proportional scaling for text
+    });
+    
+    const layer = stage.getLayers()[0];
+    if (layer) {
+      layer.add(transformer);
+      setKonvaTransformer(transformer);
+    }
+
     // 1. Selection handling - Click on empty canvas to deselect
     stage.on('click tap', (e) => {
       // If clicked on empty area (not a text node), deselect
-      if (e.target === stage || e.target.getClassName() === 'Layer') {
+      console.log('stage click tap', e.target);
+      if (e.target === stage || e.target.getClassName() === 'Image') {
         setSelectedLayer(null);
+        // Clear transformer
+        transformer.nodes([]);
         // Remove selection styling from all text nodes
         const allTextNodes = stage.find('Text') as Konva.Text[];
         allTextNodes.forEach((node) => {
@@ -338,6 +360,21 @@ export const ImageTextComposer: React.FC = () => {
             handleUpdateTextLayer(finalLayer.id, { x: textNode.x(), y: textNode.y() });
           });
 
+          // Add transform event to update scale and rotation
+          textNode.on('transform', () => {
+            const scaleX = textNode.scaleX();
+            const scaleY = textNode.scaleY();
+            const rotation = textNode.rotation();
+            
+            handleUpdateTextLayer(finalLayer.id, {
+              x: textNode.x(),
+              y: textNode.y(),
+              scaleX: scaleX,
+              scaleY: scaleY,
+              rotation: rotation,
+            });
+          });
+
           layer.add(textNode);
           layer.batchDraw();
         }
@@ -417,8 +454,8 @@ export const ImageTextComposer: React.FC = () => {
     console.log('handleSelectTextLayer', layer);
     setSelectedLayer(layer);
     
-    // Select Konva Text node and add visual selection feedback
-    if (konvaStage) {
+    // Select Konva Text node and attach transformer
+    if (konvaStage && konvaTransformer) {
       // First, deselect all nodes by removing any existing selection
       const allTextNodes = konvaStage.find('Text') as Konva.Text[];
       allTextNodes.forEach((node) => {
@@ -429,12 +466,12 @@ export const ImageTextComposer: React.FC = () => {
       // Select the target text node
       const textNode = konvaStage.findOne(`#${layer.id}`) as Konva.Text;
       if (textNode) {
-        // Add visual selection feedback (stroke border)
-        textNode.stroke('#007bff');
-        textNode.strokeWidth(2);
+        // Attach transformer to the selected node
+        konvaTransformer.nodes([textNode]);
         
         // Bring to front
         textNode.moveToTop();
+        konvaTransformer.moveToTop();
         
         // Redraw the layer
         textNode.getLayer()?.batchDraw();
@@ -555,6 +592,21 @@ export const ImageTextComposer: React.FC = () => {
         // Add drag event to update position
         textNode.on('dragend', () => {
           handleUpdateTextLayer(finalDuplicatedLayer.id, { x: textNode.x(), y: textNode.y() });
+        });
+
+        // Add transform event to update scale and rotation
+        textNode.on('transform', () => {
+          const scaleX = textNode.scaleX();
+          const scaleY = textNode.scaleY();
+          const rotation = textNode.rotation();
+          
+          handleUpdateTextLayer(finalDuplicatedLayer.id, {
+            x: textNode.x(),
+            y: textNode.y(),
+            scaleX: scaleX,
+            scaleY: scaleY,
+            rotation: rotation,
+          });
         });
 
         layer.add(textNode);
@@ -756,29 +808,40 @@ export const ImageTextComposer: React.FC = () => {
 
           // Add click event for selection (using current layer data, not closure)
           textNode.on('click', () => {
-            if (!isRestoringHistory) {
-              setSelectedLayer(textLayer);
-            }
+            handleSelectLayer(textLayer);
           });
 
           // Add drag event to update position
           textNode.on('dragend', () => {
-            if (!isRestoringHistory) {
-              const updatedLayers = textLayers.map(layer => 
-                layer.id === textLayer.id 
-                  ? { ...layer, x: textNode.x(), y: textNode.y() }
-                  : layer
-              );
-              setTextLayers(updatedLayers);
-              setSelectedLayer(prev => prev?.id === textLayer.id ? { ...prev, x: textNode.x(), y: textNode.y() } : prev);
-            }
+            handleUpdateTextLayer(textLayer.id, { x: textNode.x(), y: textNode.y() });
           });
+
+          // Add transform event to update scale and rotation
+          textNode.on('transform', () => {
+            const scaleX = textNode.scaleX();
+            const scaleY = textNode.scaleY();
+            const rotation = textNode.rotation();
+
+            handleUpdateTextLayer(textLayer.id, {
+              x: textNode.x(),
+              y: textNode.y(),
+              scaleX: scaleX,
+              scaleY: scaleY,
+              rotation: rotation,
+            });
+          });
+
 
           layer.add(textNode);
         });
         
         // Clear selection as we're restoring from history
         setSelectedLayer(null);
+        
+        // Clear transformer selection
+        if (konvaTransformer) {
+          konvaTransformer.nodes([]);
+        }
         
         // Redraw the layer
         layer.batchDraw();
@@ -789,7 +852,7 @@ export const ImageTextComposer: React.FC = () => {
         isRestoringHistory = false;
       }, 0);
     }
-  }, [currentState, konvaStage, isUndoRedo]);
+  }, [currentState, konvaStage, isUndoRedo, konvaTransformer]);
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
