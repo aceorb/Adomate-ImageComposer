@@ -35,5 +35,20 @@ export const useLocalStorage = <T>(key: string, initialValue: T) => {
     }
   };
 
-  return [storedValue, setValue, removeValue] as const;
+  const loadSavedData = () => {
+    try {
+      const item = window.localStorage.getItem(key);
+      if (item) {
+        const parsedValue = JSON.parse(item);
+        setStoredValue(parsedValue);
+        return parsedValue;
+      }
+      return null;
+    } catch (error) {
+      console.error(`Error loading localStorage key "${key}":`, error);
+      return null;
+    }
+  };
+
+  return [storedValue, setValue, removeValue, loadSavedData] as const;
 };

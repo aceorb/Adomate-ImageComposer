@@ -40,10 +40,7 @@ export const ImageTextComposer: React.FC = () => {
   } = useCanvasHistory(initialState);
   
   // Autosave to localStorage
-  const [savedState, setSavedState, removeSavedState] = useLocalStorage<CanvasState | null>('adomate-design', null);
-
-
-
+  const [savedState, setSavedState, removeSavedState, loadSavedData] = useLocalStorage<CanvasState | null>('adomate-design', null);
 
   // Auto-save current state every 2 seconds when there are changes
   useEffect(() => {
@@ -65,13 +62,19 @@ export const ImageTextComposer: React.FC = () => {
   
   // Load saved state on mount
   useEffect(() => {
-    if (savedState && savedState.backgroundImage) {
-      setBackgroundImage(savedState.backgroundImage);
+    const loadedState = loadSavedData();
+    console.log('mount', loadedState);
+    if (loadedState && loadedState.backgroundImage) {
+      // Update React state
+      setBackgroundImage(loadedState.backgroundImage);
       setCanvasDimensions({
-        width: savedState.canvasWidth,
-        height: savedState.canvasHeight,
+        width: loadedState.canvasWidth,
+        height: loadedState.canvasHeight,
       });
-      setTextLayers(savedState.textLayers);
+      setTextLayers(loadedState.textLayers);
+      
+      // Reset history with loaded state - this will trigger the history restoration effect
+      resetHistory(loadedState);
     }
   }, []);
   
@@ -242,9 +245,9 @@ export const ImageTextComposer: React.FC = () => {
     }
   };
 
-  const handleCanvasReady = (stage: Konva.Stage) => {
+  const handleCanvasReady = useCallback((stage: Konva.Stage) => {
     setKonvaStage(stage);
-    // console.log('Konva stage ready:', stage);
+    console.log('Konva stage ready:', stage);
 
     // 1. Selection handling - Click on empty canvas to deselect
     stage.on('click tap', (e) => {
@@ -260,7 +263,7 @@ export const ImageTextComposer: React.FC = () => {
         stage.batchDraw();
       }
     });
-  };
+  }, [setKonvaStage, setSelectedLayer]);
   
   const handleAddTextLayer = () => {
     if (!konvaStage || !Konva) {
@@ -411,7 +414,7 @@ export const ImageTextComposer: React.FC = () => {
   };
   
   const handleSelectLayer = (layer: TextLayer) => {
-    console.log('handleUpdateTextLayer', layer);
+    console.log('handleSelectTextLayer', layer);
     setSelectedLayer(layer);
     
     // Select Konva Text node and add visual selection feedback

@@ -47,6 +47,7 @@ export const useCanvasHistory = (initialState: CanvasState) => {
   }, []);
 
   const resetHistory = useCallback((newInitialState: CanvasState) => {
+    setIsUndoRedo(true);
     setHistory({
       states: [newInitialState],
       currentIndex: 0,
