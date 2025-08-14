@@ -18,8 +18,10 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { TextLayer, CanvasState } from '@/types';
 import { useCanvasHistory } from '@/hooks/useCanvasHistory';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import Konva from "konva";
 
 export default function Home() {
+
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 800, height: 600 });
   const [konvaStage, setKonvaStage] = useState<any>(null);
@@ -48,7 +50,17 @@ export default function Home() {
   
   // Autosave to localStorage
   const [savedState, setSavedState, removeSavedState] = useLocalStorage<CanvasState | null>('adomate-design', null);
-  
+
+  // Cleanup effect for removing event listeners
+  useEffect(() => {
+    return () => {
+      // Clean up keyboard event listeners when component unmounts
+      if (konvaStage && (konvaStage as any)._keydownHandler) {
+        document.removeEventListener('keydown', (konvaStage as any)._keydownHandler);
+      }
+    };
+  }, [konvaStage]);
+
   // Auto-save current state every 2 seconds when there are changes
   useEffect(() => {
     if (backgroundImage || textLayers.length > 0) {
@@ -81,7 +93,19 @@ export default function Home() {
   
   const handleResetDesign = () => {
     if (confirm('Are you sure you want to reset the design? This will clear everything and cannot be undone.')) {
-      // TODO: Clear Konva stage
+      // Clear Konva stage
+      if (konvaStage) {
+        // Remove all text nodes from the stage
+        const allTextNodes = konvaStage.find('Text') as Konva.Text[];
+        allTextNodes.forEach(node => {
+          node.destroy();
+        });
+        
+        // Redraw all layers to reflect changes
+        konvaStage.getLayers().forEach(layer => {
+          layer.batchDraw();
+        });
+      }
       
       // Reset state
       setBackgroundImage(null);
@@ -184,17 +208,74 @@ export default function Home() {
     }
   };
   
-  // TODO: Implement Konva.js history restoration
-  // Restore state when history changes (undo/redo)
+  // // Implement Konva.js history restoration
+  // // Restore state when history changes (undo/redo)
   // useEffect(() => {
   //   if (currentState && konvaStage) {
   //     // Update background image if different
   //     if (currentState.backgroundImage !== backgroundImage) {
   //       setBackgroundImage(currentState.backgroundImage);
   //     }
-  //     
-  //     // Clear current canvas objects and recreate with Konva
-  //     // TODO: Implement with Konva Layer management
+  //
+  //     // Update canvas dimensions if different
+  //     if (currentState.canvasWidth !== canvasDimensions.width ||
+  //         currentState.canvasHeight !== canvasDimensions.height) {
+  //       setCanvasDimensions({
+  //         width: currentState.canvasWidth,
+  //         height: currentState.canvasHeight
+  //       });
+  //     }
+  //
+  //     // Clear current canvas objects and recreate with Konva Layer management
+  //     const layer = konvaStage.getLayers()[0];
+  //     if (layer) {
+  //       // Remove all existing text nodes
+  //       const allTextNodes = layer.find('Text') as Konva.Text[];
+  //       allTextNodes.forEach(node => node.destroy());
+  //
+  //       // Recreate text nodes from history state
+  //       currentState.textLayers.forEach(textLayer => {
+  //         const textNode = new Konva.Text({
+  //           id: textLayer.id,
+  //           x: textLayer.x,
+  //           y: textLayer.y,
+  //           text: textLayer.text,
+  //           fontSize: textLayer.fontSize,
+  //           fontFamily: textLayer.fontFamily,
+  //           fontStyle: textLayer.fontWeight,
+  //           fill: textLayer.color,
+  //           opacity: textLayer.opacity,
+  //           align: textLayer.alignment,
+  //           rotation: textLayer.rotation,
+  //           scaleX: textLayer.scaleX,
+  //           scaleY: textLayer.scaleY,
+  //           lineHeight: textLayer.lineHeight,
+  //           letterSpacing: textLayer.letterSpacing,
+  //           draggable: true,
+  //         });
+  //
+  //         // Add click event for selection
+  //         textNode.on('click', () => {
+  //           handleSelectLayer(textLayer);
+  //         });
+  //
+  //         // Add drag event to update position
+  //         textNode.on('dragend', () => {
+  //           handleUpdateTextLayer(textLayer.id, { x: textNode.x(), y: textNode.y() });
+  //         });
+  //
+  //         layer.add(textNode);
+  //       });
+  //
+  //       // Update React state to match history
+  //       setTextLayers(currentState.textLayers);
+  //
+  //       // Clear selection as we're restoring from history
+  //       setSelectedLayer(null);
+  //
+  //       // Redraw the layer
+  //       layer.batchDraw();
+  //     }
   //   }
   // }, [currentState, konvaStage]);
 
@@ -232,10 +313,123 @@ export default function Home() {
     setKonvaStage(stage);
     console.log('Konva stage ready:', stage);
     
-    // TODO: Implement Konva event handlers
-    // - Selection handling
-    // - Object modification tracking
-    // - Keyboard shortcuts
+    // Implement Konva event handlers
+    
+    // 1. Selection handling - Click on empty canvas to deselect
+    stage.on('click tap', (e: any) => {
+      // If clicked on empty area (not a text node), deselect
+      if (e.target === stage || e.target.getClassName() === 'Layer') {
+        setSelectedLayer(null);
+        // Remove selection styling from all text nodes
+        const allTextNodes = stage.find('Text') as Konva.Text[];
+        allTextNodes.forEach((node: any) => {
+          node.stroke('');
+          node.strokeWidth(0);
+        });
+        stage.batchDraw();
+      }
+    });
+    
+    // 2. Object modification tracking - Track drag operations for history
+    let dragStartState: CanvasState | null = null;
+    
+    stage.on('dragstart', (e: any) => {
+      if (e.target.getClassName() === 'Text') {
+        // Save state before drag for history
+        dragStartState = {
+          backgroundImage,
+          textLayers: [...textLayers],
+          canvasWidth: canvasDimensions.width,
+          canvasHeight: canvasDimensions.height,
+        };
+      }
+    });
+    
+    stage.on('dragend', (e: any) => {
+      if (e.target.getClassName() === 'Text' && dragStartState) {
+        // Add drag operation to history
+        const currentCanvasState: CanvasState = {
+          backgroundImage,
+          textLayers: textLayers.map(layer => 
+            layer.id === e.target.id() 
+              ? { ...layer, x: e.target.x(), y: e.target.y() }
+              : layer
+          ),
+          canvasWidth: canvasDimensions.width,
+          canvasHeight: canvasDimensions.height,
+        };
+        addToHistory(currentCanvasState);
+        dragStartState = null;
+      }
+    });
+    
+    // 3. Keyboard shortcuts
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle if canvas has focus or no input is focused
+      const activeElement = document.activeElement;
+      const isInputFocused = activeElement && (
+        activeElement.tagName === 'INPUT' || 
+        activeElement.tagName === 'TEXTAREA' ||
+        activeElement.contentEditable === 'true'
+      );
+      
+      if (!isInputFocused) {
+        // Delete selected layer
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          if (selectedLayer) {
+            handleDeleteLayer(selectedLayer.id);
+          }
+        }
+        
+        // Duplicate selected layer
+        if (e.key === 'd' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          if (selectedLayer) {
+            handleDuplicateLayer(selectedLayer.id);
+          }
+        }
+        
+        // Undo
+        if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+          e.preventDefault();
+          if (canUndo) {
+            undo();
+          }
+        }
+        
+        // Redo
+        if (e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+          e.preventDefault();
+          if (canRedo) {
+            redo();
+          }
+        }
+        
+        // Arrow keys for fine positioning
+        if (selectedLayer && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+          e.preventDefault();
+          const step = e.shiftKey ? 10 : 1;
+          let newX = selectedLayer.x;
+          let newY = selectedLayer.y;
+          
+          switch (e.key) {
+            case 'ArrowUp': newY -= step; break;
+            case 'ArrowDown': newY += step; break;
+            case 'ArrowLeft': newX -= step; break;
+            case 'ArrowRight': newX += step; break;
+          }
+          
+          handleUpdateTextLayer(selectedLayer.id, { x: newX, y: newY });
+        }
+      }
+    };
+    
+    // Add keyboard event listener
+    document.addEventListener('keydown', handleKeyDown);
+    
+    // Store cleanup function in stage for later removal
+    (stage as any)._keydownHandler = handleKeyDown;
   };
   
   const handleAddTextLayer = () => {
@@ -266,7 +460,42 @@ export default function Home() {
         letterSpacing: 0
       };
       
-      // TODO: Add Konva Text node to stage
+      // Add Konva Text node to stage
+      if (konvaStage) {
+        const layer = konvaStage.getLayers()[0]; // Get the main layer
+        const textNode = new Konva.Text({
+          id: newLayer.id,
+          x: newLayer.x,
+          y: newLayer.y,
+          text: newLayer.text,
+          fontSize: newLayer.fontSize,
+          fontFamily: newLayer.fontFamily,
+          fontStyle: newLayer.fontWeight,
+          fill: newLayer.color,
+          opacity: newLayer.opacity,
+          align: newLayer.alignment,
+          rotation: newLayer.rotation,
+          scaleX: newLayer.scaleX,
+          scaleY: newLayer.scaleY,
+          lineHeight: newLayer.lineHeight,
+          letterSpacing: newLayer.letterSpacing,
+          draggable: true,
+        });
+
+        // Add click event for selection
+        textNode.on('click', () => {
+          handleSelectLayer(newLayer);
+        });
+
+        // Add drag event to update position
+        textNode.on('dragend', () => {
+          handleUpdateTextLayer(newLayer.id, { x: textNode.x(), y: textNode.y() });
+        });
+
+        layer.add(textNode);
+        layer.batchDraw();
+      }
+      
       setTextLayers(prev => [...prev, newLayer]);
       setSelectedLayer(newLayer);
       
@@ -291,7 +520,30 @@ export default function Home() {
       )
     );
     
-    // TODO: Update Konva Text node
+    // Update Konva Text node
+    if (konvaStage) {
+      const textNode = konvaStage.findOne(`#${id}`) as Konva.Text;
+      if (textNode) {
+        // Update text node properties
+        if (updates.text !== undefined) textNode.text(updates.text);
+        if (updates.x !== undefined) textNode.x(updates.x);
+        if (updates.y !== undefined) textNode.y(updates.y);
+        if (updates.fontSize !== undefined) textNode.fontSize(updates.fontSize);
+        if (updates.fontFamily !== undefined) textNode.fontFamily(updates.fontFamily);
+        if (updates.fontWeight !== undefined) textNode.fontStyle(updates.fontWeight);
+        if (updates.color !== undefined) textNode.fill(updates.color);
+        if (updates.opacity !== undefined) textNode.opacity(updates.opacity);
+        if (updates.alignment !== undefined) textNode.align(updates.alignment);
+        if (updates.rotation !== undefined) textNode.rotation(updates.rotation);
+        if (updates.scaleX !== undefined) textNode.scaleX(updates.scaleX);
+        if (updates.scaleY !== undefined) textNode.scaleY(updates.scaleY);
+        if (updates.lineHeight !== undefined) textNode.lineHeight(updates.lineHeight);
+        if (updates.letterSpacing !== undefined) textNode.letterSpacing(updates.letterSpacing);
+        
+        // Redraw the layer
+        textNode.getLayer()?.batchDraw();
+      }
+    }
     
     // Update selected layer if it's the one being updated
     if (selectedLayer?.id === id) {
@@ -301,22 +553,190 @@ export default function Home() {
   
   const handleSelectLayer = (layer: TextLayer) => {
     setSelectedLayer(layer);
-    // TODO: Select Konva Text node
+    
+    // Select Konva Text node and add visual selection feedback
+    if (konvaStage) {
+      // First, deselect all nodes by removing any existing selection
+      const allTextNodes = konvaStage.find('Text') as Konva.Text[];
+      allTextNodes.forEach(node => {
+        node.stroke('');
+        node.strokeWidth(0);
+      });
+      
+      // Select the target text node
+      const textNode = konvaStage.findOne(`#${layer.id}`) as Konva.Text;
+      if (textNode) {
+        // Add visual selection feedback (stroke border)
+        textNode.stroke('#007bff');
+        textNode.strokeWidth(2);
+        
+        // Bring to front
+        textNode.moveToTop();
+        
+        // Redraw the layer
+        textNode.getLayer()?.batchDraw();
+      }
+    }
   };
   
   const handleReorderLayer = (layerId: string, direction: 'up' | 'down') => {
-    // TODO: Implement with Konva layer reordering
-    console.log('Reorder layer:', layerId, direction);
+    try {
+      setAppError(null);
+      
+      const layerIndex = textLayers.findIndex(layer => layer.id === layerId);
+      if (layerIndex === -1) return;
+      
+      const newIndex = direction === 'up' ? layerIndex + 1 : layerIndex - 1;
+      if (newIndex < 0 || newIndex >= textLayers.length) return;
+      
+      // Reorder in state
+      const newLayers = [...textLayers];
+      [newLayers[layerIndex], newLayers[newIndex]] = [newLayers[newIndex], newLayers[layerIndex]];
+      
+      // Update zIndex values
+      const updatedLayers = newLayers.map((layer, index) => ({
+        ...layer,
+        zIndex: index
+      }));
+      
+      // Reorder Konva nodes
+      if (konvaStage) {
+        const textNode = konvaStage.findOne(`#${layerId}`) as Konva.Text;
+        if (textNode) {
+          if (direction === 'up') {
+            textNode.moveUp();
+          } else {
+            textNode.moveDown();
+          }
+          textNode.getLayer()?.batchDraw();
+        }
+      }
+      
+      setTextLayers(updatedLayers);
+      
+      // Add to history
+      const newState: CanvasState = {
+        backgroundImage,
+        textLayers: updatedLayers,
+        canvasWidth: canvasDimensions.width,
+        canvasHeight: canvasDimensions.height,
+      };
+      addToHistory(newState);
+    } catch (error) {
+      console.error('Error reordering layer:', error);
+      setAppError('Failed to reorder layer. Please try again.');
+    }
   };
   
   const handleDuplicateLayer = (layerId: string) => {
-    // TODO: Implement with Konva
-    console.log('Duplicate layer:', layerId);
+    try {
+      setAppError(null);
+      
+      const originalLayer = textLayers.find(layer => layer.id === layerId);
+      if (!originalLayer || !konvaStage) return;
+      
+      // Create duplicate layer with new ID and slight offset
+      const duplicatedLayer: TextLayer = {
+        ...originalLayer,
+        id: `text-${Date.now()}`,
+        x: originalLayer.x + 20,
+        y: originalLayer.y + 20,
+        zIndex: textLayers.length,
+      };
+      
+      // Create Konva Text node for duplicate
+      const layer = konvaStage.getLayers()[0];
+      const textNode = new Konva.Text({
+        id: duplicatedLayer.id,
+        x: duplicatedLayer.x,
+        y: duplicatedLayer.y,
+        text: duplicatedLayer.text,
+        fontSize: duplicatedLayer.fontSize,
+        fontFamily: duplicatedLayer.fontFamily,
+        fontStyle: duplicatedLayer.fontWeight,
+        fill: duplicatedLayer.color,
+        opacity: duplicatedLayer.opacity,
+        align: duplicatedLayer.alignment,
+        rotation: duplicatedLayer.rotation,
+        scaleX: duplicatedLayer.scaleX,
+        scaleY: duplicatedLayer.scaleY,
+        lineHeight: duplicatedLayer.lineHeight,
+        letterSpacing: duplicatedLayer.letterSpacing,
+        draggable: true,
+      });
+
+      // Add click event for selection
+      textNode.on('click', () => {
+        handleSelectLayer(duplicatedLayer);
+      });
+
+      // Add drag event to update position
+      textNode.on('dragend', () => {
+        handleUpdateTextLayer(duplicatedLayer.id, { x: textNode.x(), y: textNode.y() });
+      });
+
+      layer.add(textNode);
+      layer.batchDraw();
+      
+      const updatedLayers = [...textLayers, duplicatedLayer];
+      setTextLayers(updatedLayers);
+      setSelectedLayer(duplicatedLayer);
+      
+      // Add to history
+      const newState: CanvasState = {
+        backgroundImage,
+        textLayers: updatedLayers,
+        canvasWidth: canvasDimensions.width,
+        canvasHeight: canvasDimensions.height,
+      };
+      addToHistory(newState);
+    } catch (error) {
+      console.error('Error duplicating layer:', error);
+      setAppError('Failed to duplicate layer. Please try again.');
+    }
   };
   
   const handleDeleteLayer = (layerId: string) => {
-    // TODO: Implement with Konva
-    console.log('Delete layer:', layerId);
+    try {
+      setAppError(null);
+      
+      if (!konvaStage) return;
+      
+      // Remove Konva Text node
+      const textNode = konvaStage.findOne(`#${layerId}`) as Konva.Text;
+      if (textNode) {
+        textNode.destroy();
+        textNode.getLayer()?.batchDraw();
+      }
+      
+      // Remove from state
+      const updatedLayers = textLayers.filter(layer => layer.id !== layerId);
+      
+      // Update zIndex values after deletion
+      const reindexedLayers = updatedLayers.map((layer, index) => ({
+        ...layer,
+        zIndex: index
+      }));
+      
+      setTextLayers(reindexedLayers);
+      
+      // Clear selection if deleted layer was selected
+      if (selectedLayer?.id === layerId) {
+        setSelectedLayer(null);
+      }
+      
+      // Add to history
+      const newState: CanvasState = {
+        backgroundImage,
+        textLayers: reindexedLayers,
+        canvasWidth: canvasDimensions.width,
+        canvasHeight: canvasDimensions.height,
+      };
+      addToHistory(newState);
+    } catch (error) {
+      console.error('Error deleting layer:', error);
+      setAppError('Failed to delete layer. Please try again.');
+    }
   };
 
   return (
