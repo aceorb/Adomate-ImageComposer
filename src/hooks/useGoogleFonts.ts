@@ -23,7 +23,7 @@ export const useGoogleFonts = () => {
         }
         
         const data: GoogleFontsResponse = await response.json();
-        setFonts(data.items.slice(0, 100)); // Limit to first 100 fonts for performance
+        setFonts(data.items);
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');

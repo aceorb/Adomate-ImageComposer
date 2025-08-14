@@ -39,6 +39,17 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
     { value: '600', label: 'Semi Bold' },
   ];
 
+  // Convert font weight strings to numeric values for Google Fonts API
+  const fontWeightToNumber = (weight: string): string => {
+    switch (weight) {
+      case 'normal': return '400';
+      case 'bold': return '700';
+      case '300': return '300';
+      case '600': return '600';
+      default: return '400';
+    }
+  };
+
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     if (selectedLayer) {
@@ -50,7 +61,11 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
     if (selectedLayer) {
       // If changing font family and it's a Google Font, load it
       if (property === 'fontFamily' && typeof value === 'string' && !basicFonts.includes(value)) {
-        loadFont(value, selectedLayer.fontWeight);
+        loadFont(value, fontWeightToNumber(selectedLayer.fontWeight));
+      }
+      // If changing font weight and current font is a Google Font, reload it with new weight
+      if (property === 'fontWeight' && typeof value === 'string' && !basicFonts.includes(selectedLayer.fontFamily)) {
+        loadFont(selectedLayer.fontFamily, fontWeightToNumber(value));
       }
       onUpdateTextLayer(selectedLayer.id, { [property]: value });
     }
@@ -110,7 +125,7 @@ export const TextToolsPanel: React.FC<TextToolsPanelProps> = ({
               </optgroup>
               {!fontsLoading && fonts.length > 0 && (
                 <optgroup label="Google Fonts">
-                  {fonts.slice(0, 50).map(font => (
+                  {fonts.map(font => (
                     <option key={font.family} value={font.family} style={{ fontFamily: font.family }}>
                       {font.family}
                     </option>
