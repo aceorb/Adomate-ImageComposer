@@ -4,6 +4,7 @@ import { useRef, useEffect, useState } from 'react';
 import { Stage, Layer, Image as KonvaImage } from 'react-konva';
 import Konva from 'konva';
 import useImage from 'use-image';
+import ImageConfig = Konva.ImageConfig;
 
 interface CanvasEditorProps {
   backgroundImage: string | null;
@@ -40,8 +41,8 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
     }
   }, [image]);
 
-  const getImageProps = () => {
-    if (!image) return {};
+  const getImageProps = (): ImageConfig | null => {
+    if (!image) return null;
     
     // Calculate scale to fit canvas while maintaining aspect ratio
     const scaleX = canvasWidth / image.width;
@@ -76,7 +77,10 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
         className="block max-w-full max-h-full"
       >
         <Layer>
-          {image && <KonvaImage {...getImageProps()} />}
+          {(() => {
+            const imageProps = getImageProps();
+            return imageProps && <KonvaImage {...imageProps} />;
+          })()}
         </Layer>
       </Stage>
     </div>
