@@ -36,6 +36,7 @@ export const ImageTextComposer: React.FC = () => {
     canUndo,
     canRedo,
     historyLength,
+    isUndoRedo,
   } = useCanvasHistory(initialState);
   
   // Autosave to localStorage
@@ -243,7 +244,7 @@ export const ImageTextComposer: React.FC = () => {
 
   const handleCanvasReady = (stage: Konva.Stage) => {
     setKonvaStage(stage);
-    console.log('Konva stage ready:', stage);
+    // console.log('Konva stage ready:', stage);
 
     // 1. Selection handling - Click on empty canvas to deselect
     stage.on('click tap', (e) => {
@@ -259,40 +260,6 @@ export const ImageTextComposer: React.FC = () => {
         stage.batchDraw();
       }
     });
-    
-    // 2. Object modification tracking - Track drag operations for history
-    let dragStartState: CanvasState | null = null;
-    
-    stage.on('dragstart', (e) => {
-      if (e.target.getClassName() === 'Text') {
-        // Save state before drag for history
-        dragStartState = {
-          backgroundImage,
-          textLayers: [...textLayers],
-          canvasWidth: canvasDimensions.width,
-          canvasHeight: canvasDimensions.height,
-        };
-      }
-    });
-    
-    stage.on('dragend', (e) => {
-      if (e.target.getClassName() === 'Text' && dragStartState) {
-        // Add drag operation to history
-        const currentCanvasState: CanvasState = {
-          backgroundImage,
-          textLayers: textLayers.map(layer => 
-            layer.id === e.target.id() 
-              ? { ...layer, x: e.target.x(), y: e.target.y() }
-              : layer
-          ),
-          canvasWidth: canvasDimensions.width,
-          canvasHeight: canvasDimensions.height,
-        };
-        console.log('dragend', currentCanvasState);
-        addToHistory(currentCanvasState);
-        dragStartState = null;
-      }
-    });
   };
   
   const handleAddTextLayer = () => {
@@ -304,6 +271,7 @@ export const ImageTextComposer: React.FC = () => {
     try {
       setAppError(null);
     
+      // Create the new layer first
       const newLayer: TextLayer = {
         id: `text-${Date.now()}`,
         text: 'New Text',
@@ -318,58 +286,71 @@ export const ImageTextComposer: React.FC = () => {
         rotation: 0,
         scaleX: 1,
         scaleY: 1,
-        zIndex: textLayers.length,
+        zIndex: 0, // Will be set correctly in the setState
         lineHeight: 1.2,
         letterSpacing: 0
       };
       
-      // Add Konva Text node to stage
-      if (konvaStage) {
-        const layer = konvaStage.getLayers()[0]; // Get the main layer
-        const textNode = new Konva.Text({
-          id: newLayer.id,
-          x: newLayer.x,
-          y: newLayer.y,
-          text: newLayer.text,
-          fontSize: newLayer.fontSize,
-          fontFamily: newLayer.fontFamily,
-          fontStyle: newLayer.fontWeight,
-          fill: newLayer.color,
-          opacity: newLayer.opacity,
-          align: newLayer.alignment,
-          rotation: newLayer.rotation,
-          scaleX: newLayer.scaleX,
-          scaleY: newLayer.scaleY,
-          lineHeight: newLayer.lineHeight,
-          letterSpacing: newLayer.letterSpacing,
-          draggable: true,
-        });
-
-        // Add click event for selection
-        textNode.on('click', () => {
-          handleSelectLayer(newLayer);
-        });
-
-        // Add drag event to update position
-        textNode.on('dragend', () => {
-          handleUpdateTextLayer(newLayer.id, { x: textNode.x(), y: textNode.y() });
-        });
-
-        layer.add(textNode);
-        layer.batchDraw();
-      }
+      let updatedLayers: TextLayer[] = [];
       
-      setTextLayers(prev => [...prev, newLayer]);
-      setSelectedLayer(newLayer);
-      
-      // Add to history
-      const newState: CanvasState = {
-        backgroundImage,
-        textLayers: [...textLayers, newLayer],
-        canvasWidth: canvasDimensions.width,
-        canvasHeight: canvasDimensions.height,
-      };
-      addToHistory(newState);
+      setTextLayers(prev => {
+        // Fix the zIndex based on current array length
+        const layerWithCorrectIndex = { ...newLayer, zIndex: prev.length };
+        updatedLayers = [...prev, layerWithCorrectIndex];
+        return updatedLayers;
+      });
+      setTimeout(() => {
+        // Add Konva Text node to stage
+        if (konvaStage) {
+          const layer = konvaStage.getLayers()[0]; // Get the main layer
+          // Use the layer with correct zIndex from updatedLayers
+          console.log('handleAddTextLayer', updatedLayers);
+          const finalLayer = updatedLayers[updatedLayers.length - 1]; // The newly added layer
+          const textNode = new Konva.Text({
+            id: finalLayer.id,
+            x: finalLayer.x,
+            y: finalLayer.y,
+            text: finalLayer.text,
+            fontSize: finalLayer.fontSize,
+            fontFamily: finalLayer.fontFamily,
+            fontStyle: finalLayer.fontWeight,
+            fill: finalLayer.color,
+            opacity: finalLayer.opacity,
+            align: finalLayer.alignment,
+            rotation: finalLayer.rotation,
+            scaleX: finalLayer.scaleX,
+            scaleY: finalLayer.scaleY,
+            lineHeight: finalLayer.lineHeight,
+            letterSpacing: finalLayer.letterSpacing,
+            draggable: true,
+          });
+
+          // Add click event for selection
+          textNode.on('click', () => {
+            handleSelectLayer(finalLayer);
+          });
+
+          // Add drag event to update position
+          textNode.on('dragend', () => {
+            handleUpdateTextLayer(finalLayer.id, { x: textNode.x(), y: textNode.y() });
+          });
+
+          layer.add(textNode);
+          layer.batchDraw();
+        }
+
+        setSelectedLayer(updatedLayers[updatedLayers.length - 1]);
+
+        // Add to history - use setTimeout to ensure state has been updated
+
+        const newState: CanvasState = {
+          backgroundImage,
+          textLayers: updatedLayers,
+          canvasWidth: canvasDimensions.width,
+          canvasHeight: canvasDimensions.height,
+        };
+        addToHistory(newState);
+      }, 0);
     } catch (error) {
       console.error('Error adding text layer:', error);
       setAppError('Failed to add text layer. Please try again.');
@@ -377,11 +358,15 @@ export const ImageTextComposer: React.FC = () => {
   };
   
   const handleUpdateTextLayer = (id: string, updates: Partial<TextLayer>) => {
-    setTextLayers(prev => 
-      prev.map(layer => 
+    console.log('handleUpdateTextLayer', id, updates);
+    let updatedLayers: TextLayer[] = [];
+    
+    setTextLayers(prev => {
+      updatedLayers = prev.map(layer => 
         layer.id === id ? { ...layer, ...updates } : layer
-      )
-    );
+      );
+      return updatedLayers;
+    });
     
     // Update Konva Text node
     if (konvaStage && Konva) {
@@ -412,9 +397,21 @@ export const ImageTextComposer: React.FC = () => {
     if (selectedLayer?.id === id) {
       setSelectedLayer(prev => prev ? { ...prev, ...updates } : null);
     }
+    
+    // Add to history - use setTimeout to ensure state has been updated
+    setTimeout(() => {
+      const newState: CanvasState = {
+        backgroundImage,
+        textLayers: updatedLayers,
+        canvasWidth: canvasDimensions.width,
+        canvasHeight: canvasDimensions.height,
+      };
+      addToHistory(newState);
+    }, 0);
   };
   
   const handleSelectLayer = (layer: TextLayer) => {
+    console.log('handleUpdateTextLayer', layer);
     setSelectedLayer(layer);
     
     // Select Konva Text node and add visual selection feedback
@@ -445,22 +442,27 @@ export const ImageTextComposer: React.FC = () => {
   const handleReorderLayer = (layerId: string, direction: 'up' | 'down') => {
     try {
       setAppError(null);
+      let updatedLayers: TextLayer[] = [];
       
-      const layerIndex = textLayers.findIndex(layer => layer.id === layerId);
-      if (layerIndex === -1) return;
-      
-      const newIndex = direction === 'up' ? layerIndex + 1 : layerIndex - 1;
-      if (newIndex < 0 || newIndex >= textLayers.length) return;
-      
-      // Reorder in state
-      const newLayers = [...textLayers];
-      [newLayers[layerIndex], newLayers[newIndex]] = [newLayers[newIndex], newLayers[layerIndex]];
-      
-      // Update zIndex values
-      const updatedLayers = newLayers.map((layer, index) => ({
-        ...layer,
-        zIndex: index
-      }));
+      setTextLayers(prev => {
+        const layerIndex = prev.findIndex(layer => layer.id === layerId);
+        if (layerIndex === -1) return prev;
+        
+        const newIndex = direction === 'up' ? layerIndex + 1 : layerIndex - 1;
+        if (newIndex < 0 || newIndex >= prev.length) return prev;
+        
+        // Reorder in state
+        const newLayers = [...prev];
+        [newLayers[layerIndex], newLayers[newIndex]] = [newLayers[newIndex], newLayers[layerIndex]];
+        
+        // Update zIndex values
+        updatedLayers = newLayers.map((layer, index) => ({
+          ...layer,
+          zIndex: index
+        }));
+        
+        return updatedLayers;
+      });
       
       // Reorder Konva nodes
       if (konvaStage) {
@@ -475,16 +477,16 @@ export const ImageTextComposer: React.FC = () => {
         }
       }
       
-      setTextLayers(updatedLayers);
-      
-      // Add to history
-      const newState: CanvasState = {
-        backgroundImage,
-        textLayers: updatedLayers,
-        canvasWidth: canvasDimensions.width,
-        canvasHeight: canvasDimensions.height,
-      };
-      addToHistory(newState);
+      // Add to history - use setTimeout to ensure state has been updated
+      setTimeout(() => {
+        const newState: CanvasState = {
+          backgroundImage,
+          textLayers: updatedLayers,
+          canvasWidth: canvasDimensions.width,
+          canvasHeight: canvasDimensions.height,
+        };
+        addToHistory(newState);
+      }, 0);
     } catch (error) {
       console.error('Error reordering layer:', error);
       setAppError('Failed to reorder layer. Please try again.');
@@ -493,66 +495,80 @@ export const ImageTextComposer: React.FC = () => {
   
   const handleDuplicateLayer = (layerId: string) => {
     try {
+      if (!konvaStage || !Konva) return;
       setAppError(null);
+      let updatedLayers: TextLayer[] = [];
+      let duplicatedLayer: TextLayer | null = null;
       
-      const originalLayer = textLayers.find(layer => layer.id === layerId);
-      if (!originalLayer || !konvaStage || !Konva) return;
-      
-      // Create duplicate layer with new ID and slight offset
-      const duplicatedLayer: TextLayer = {
-        ...originalLayer,
-        id: `text-${Date.now()}`,
-        x: originalLayer.x + 20,
-        y: originalLayer.y + 20,
-        zIndex: textLayers.length,
-      };
-      
-      // Create Konva Text node for duplicate
-      const layer = konvaStage.getLayers()[0];
-      const textNode = new Konva.Text({
-        id: duplicatedLayer.id,
-        x: duplicatedLayer.x,
-        y: duplicatedLayer.y,
-        text: duplicatedLayer.text,
-        fontSize: duplicatedLayer.fontSize,
-        fontFamily: duplicatedLayer.fontFamily,
-        fontStyle: duplicatedLayer.fontWeight,
-        fill: duplicatedLayer.color,
-        opacity: duplicatedLayer.opacity,
-        align: duplicatedLayer.alignment,
-        rotation: duplicatedLayer.rotation,
-        scaleX: duplicatedLayer.scaleX,
-        scaleY: duplicatedLayer.scaleY,
-        lineHeight: duplicatedLayer.lineHeight,
-        letterSpacing: duplicatedLayer.letterSpacing,
-        draggable: true,
+      setTextLayers(prev => {
+        const originalLayer = prev.find(layer => layer.id === layerId);
+        if (!originalLayer) return prev;
+        
+        // Create duplicate layer with new ID and slight offset
+        duplicatedLayer = {
+          ...originalLayer,
+          id: `text-${Date.now()}`,
+          x: originalLayer.x + 20,
+          y: originalLayer.y + 20,
+          zIndex: prev.length,
+        };
+        
+        updatedLayers = [...prev, duplicatedLayer];
+        return updatedLayers;
       });
-
-      // Add click event for selection
-      textNode.on('click', () => {
-        handleSelectLayer(duplicatedLayer);
-      });
-
-      // Add drag event to update position
-      textNode.on('dragend', () => {
-        handleUpdateTextLayer(duplicatedLayer.id, { x: textNode.x(), y: textNode.y() });
-      });
-
-      layer.add(textNode);
-      layer.batchDraw();
       
-      const updatedLayers = [...textLayers, duplicatedLayer];
-      setTextLayers(updatedLayers);
-      setSelectedLayer(duplicatedLayer);
-      
-      // Add to history
-      const newState: CanvasState = {
-        backgroundImage,
-        textLayers: updatedLayers,
-        canvasWidth: canvasDimensions.width,
-        canvasHeight: canvasDimensions.height,
-      };
-      addToHistory(newState);
+
+      setTimeout(() => {
+        console.log('handleDuplicateLayer', layerId, updatedLayers, duplicatedLayer);
+        // Get the final layer from updatedLayers to ensure we have the correct reference
+        const finalDuplicatedLayer = updatedLayers[updatedLayers.length - 1];
+
+        // Create Konva Text node for duplicate
+        const layer = konvaStage.getLayers()[0];
+        const textNode = new Konva.Text({
+          id: finalDuplicatedLayer.id,
+          x: finalDuplicatedLayer.x,
+          y: finalDuplicatedLayer.y,
+          text: finalDuplicatedLayer.text,
+          fontSize: finalDuplicatedLayer.fontSize,
+          fontFamily: finalDuplicatedLayer.fontFamily,
+          fontStyle: finalDuplicatedLayer.fontWeight,
+          fill: finalDuplicatedLayer.color,
+          opacity: finalDuplicatedLayer.opacity,
+          align: finalDuplicatedLayer.alignment,
+          rotation: finalDuplicatedLayer.rotation,
+          scaleX: finalDuplicatedLayer.scaleX,
+          scaleY: finalDuplicatedLayer.scaleY,
+          lineHeight: finalDuplicatedLayer.lineHeight,
+          letterSpacing: finalDuplicatedLayer.letterSpacing,
+          draggable: true,
+        });
+
+        // Add click event for selection
+        textNode.on('click', () => {
+          handleSelectLayer(finalDuplicatedLayer);
+        });
+
+        // Add drag event to update position
+        textNode.on('dragend', () => {
+          handleUpdateTextLayer(finalDuplicatedLayer.id, { x: textNode.x(), y: textNode.y() });
+        });
+
+        layer.add(textNode);
+        layer.batchDraw();
+
+        setSelectedLayer(finalDuplicatedLayer);
+
+        // Add to history - use setTimeout to ensure state has been updated
+
+        const newState: CanvasState = {
+          backgroundImage,
+          textLayers: updatedLayers,
+          canvasWidth: canvasDimensions.width,
+          canvasHeight: canvasDimensions.height,
+        };
+        addToHistory(newState);
+      }, 0);
     } catch (error) {
       console.error('Error duplicating layer:', error);
       setAppError('Failed to duplicate layer. Please try again.');
@@ -572,30 +588,36 @@ export const ImageTextComposer: React.FC = () => {
         textNode.getLayer()?.batchDraw();
       }
       
-      // Remove from state
-      const updatedLayers = textLayers.filter(layer => layer.id !== layerId);
+      let reindexedLayers: TextLayer[] = [];
       
-      // Update zIndex values after deletion
-      const reindexedLayers = updatedLayers.map((layer, index) => ({
-        ...layer,
-        zIndex: index
-      }));
-      
-      setTextLayers(reindexedLayers);
+      setTextLayers(prev => {
+        // Remove from state
+        const updatedLayers = prev.filter(layer => layer.id !== layerId);
+        
+        // Update zIndex values after deletion
+        reindexedLayers = updatedLayers.map((layer, index) => ({
+          ...layer,
+          zIndex: index
+        }));
+        
+        return reindexedLayers;
+      });
       
       // Clear selection if deleted layer was selected
       if (selectedLayer?.id === layerId) {
         setSelectedLayer(null);
       }
       
-      // Add to history
-      const newState: CanvasState = {
-        backgroundImage,
-        textLayers: reindexedLayers,
-        canvasWidth: canvasDimensions.width,
-        canvasHeight: canvasDimensions.height,
-      };
-      addToHistory(newState);
+      // Add to history - use setTimeout to ensure state has been updated
+      setTimeout(() => {
+        const newState: CanvasState = {
+          backgroundImage,
+          textLayers: reindexedLayers,
+          canvasWidth: canvasDimensions.width,
+          canvasHeight: canvasDimensions.height,
+        };
+        addToHistory(newState);
+      }, 0);
     } catch (error) {
       console.error('Error deleting layer:', error);
       setAppError('Failed to delete layer. Please try again.');
@@ -621,7 +643,7 @@ export const ImageTextComposer: React.FC = () => {
         }
       }
 
-      // Duplicate selected layer
+      // Duplicate selected layer (Ctrl+D)
       if (e.key === 'd' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         if (selectedLayer) {
@@ -629,7 +651,7 @@ export const ImageTextComposer: React.FC = () => {
         }
       }
 
-      // Undo
+      // Undo (Ctrl+Z)
       if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
         e.preventDefault();
         if (canUndo) {
@@ -637,8 +659,11 @@ export const ImageTextComposer: React.FC = () => {
         }
       }
 
-      // Redo
-      if (e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+      // Redo (Ctrl+Shift+Z or Ctrl+Y)
+      if (
+        (e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey) ||
+        (e.key === 'y' && (e.ctrlKey || e.metaKey))
+      ) {
         e.preventDefault();
         if (canRedo) {
           redo();
@@ -662,7 +687,7 @@ export const ImageTextComposer: React.FC = () => {
         handleUpdateTextLayer(selectedLayer.id, { x: newX, y: newY });
       }
     }
-  }, [selectedLayer, canUndo, canRedo, undo, redo, handleDeleteLayer, handleDuplicateLayer, handleUpdateTextLayer]);
+  }, [selectedLayer, canUndo, canRedo, undo, redo]);
 
   // Effect to manage keyboard event listener
   useEffect(() => {
@@ -677,7 +702,7 @@ export const ImageTextComposer: React.FC = () => {
 
   // History restoration effect - restore state when currentState changes (undo/redo)
   useEffect(() => {
-    if (currentState && konvaStage) {
+    if (currentState && konvaStage && isUndoRedo) {
       // Use a flag to prevent state updates during history restoration
       let isRestoringHistory = true;
       
@@ -761,7 +786,7 @@ export const ImageTextComposer: React.FC = () => {
         isRestoringHistory = false;
       }, 0);
     }
-  }, [currentState, konvaStage]);
+  }, [currentState, konvaStage, isUndoRedo]);
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">

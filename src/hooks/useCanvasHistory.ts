@@ -10,9 +10,11 @@ export const useCanvasHistory = (initialState: CanvasState) => {
     states: [initialState],
     currentIndex: 0,
   });
+  const [isUndoRedo, setIsUndoRedo] = useState(false);
 
   const addToHistory = useCallback((state: CanvasState) => {
-    console.log('addToHistory', state);
+    // console.log('addToHistory', state);
+    setIsUndoRedo(false); // Not an undo/redo operation
     setHistory(prev => {
       const newStates = [...prev.states.slice(0, prev.currentIndex + 1), state];
       
@@ -29,6 +31,7 @@ export const useCanvasHistory = (initialState: CanvasState) => {
   }, []);
 
   const undo = useCallback(() => {
+    setIsUndoRedo(true); // This is an undo/redo operation
     setHistory(prev => ({
       ...prev,
       currentIndex: Math.max(0, prev.currentIndex - 1),
@@ -36,6 +39,7 @@ export const useCanvasHistory = (initialState: CanvasState) => {
   }, []);
 
   const redo = useCallback(() => {
+    setIsUndoRedo(true); // This is an undo/redo operation
     setHistory(prev => ({
       ...prev,
       currentIndex: Math.min(prev.states.length - 1, prev.currentIndex + 1),
@@ -62,5 +66,6 @@ export const useCanvasHistory = (initialState: CanvasState) => {
     canUndo,
     canRedo,
     historyLength: history.states.length,
+    isUndoRedo,
   };
 };
