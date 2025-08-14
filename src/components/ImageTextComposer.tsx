@@ -1,12 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ImageUpload } from '@/components/ImageUpload';
-import { TextToolsPanel } from '@/components/TextToolsPanel';
-import { LayersPanel } from '@/components/LayersPanel';
-import { HistoryPanel } from '@/components/HistoryPanel';
-import { AutosaveIndicator } from '@/components/AutosaveIndicator';
-import { ExportPanel } from '@/components/ExportPanel';
+import { LeftToolbar } from '@/components/LeftToolbar';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { TextLayer, CanvasState } from '@/types';
 import { useCanvasHistory } from '@/hooks/useCanvasHistory';
@@ -37,6 +32,7 @@ export const ImageTextComposer: React.FC = () => {
     addToHistory,
     undo,
     redo,
+    resetHistory,
     canUndo,
     canRedo,
     historyLength,
@@ -99,6 +95,15 @@ export const ImageTextComposer: React.FC = () => {
       setTextLayers([]);
       setSelectedLayer(null);
       setCanvasDimensions({ width: 800, height: 600 });
+      
+      // Reset history to clean state
+      const resetState: CanvasState = {
+        backgroundImage: null,
+        textLayers: [],
+        canvasWidth: 800,
+        canvasHeight: 600,
+      };
+      resetHistory(resetState);
       
       // Clear localStorage
       removeSavedState();
@@ -200,8 +205,6 @@ export const ImageTextComposer: React.FC = () => {
       setAppError(null);
       setIsLoading(true);
       
-      setBackgroundImage(imageUrl);
-      
       // Calculate canvas dimensions to maintain aspect ratio
       const maxWidth = 800;
       const maxHeight = 600;
@@ -215,7 +218,20 @@ export const ImageTextComposer: React.FC = () => {
         canvasWidth = maxHeight * aspectRatio;
       }
       
-      setCanvasDimensions({ width: Math.round(canvasWidth), height: Math.round(canvasHeight) });
+      const newCanvasDimensions = { width: Math.round(canvasWidth), height: Math.round(canvasHeight) };
+      
+      // Update state
+      setBackgroundImage(imageUrl);
+      setCanvasDimensions(newCanvasDimensions);
+      
+      // Add image upload to history
+      const newState: CanvasState = {
+        backgroundImage: imageUrl,
+        textLayers: textLayers, // Keep existing text layers
+        canvasWidth: newCanvasDimensions.width,
+        canvasHeight: newCanvasDimensions.height,
+      };
+      addToHistory(newState);
       
       setTimeout(() => setIsLoading(false), 500); // Brief loading for UX
     } catch (error) {
@@ -658,103 +674,168 @@ export const ImageTextComposer: React.FC = () => {
     };
   }, [handleKeyDown]);
 
+  // History restoration effect - restore state when currentState changes (undo/redo)
+  useEffect(() => {
+    if (currentState && konvaStage) {
+      // Use a flag to prevent state updates during history restoration
+      let isRestoringHistory = true;
+      
+      // Update background image if different
+      if (currentState.backgroundImage !== backgroundImage) {
+        setBackgroundImage(currentState.backgroundImage);
+      }
+      
+      // Update canvas dimensions if different
+      if (currentState.canvasWidth !== canvasDimensions.width || 
+          currentState.canvasHeight !== canvasDimensions.height) {
+        setCanvasDimensions({
+          width: currentState.canvasWidth,
+          height: currentState.canvasHeight
+        });
+      }
+      
+      // Update text layers state
+      setTextLayers(currentState.textLayers);
+      
+      // Clear current canvas objects and recreate with Konva Layer management
+      const layer = konvaStage.getLayers()[0];
+      if (layer) {
+        // Remove all existing text nodes
+        const allTextNodes = layer.find('Text') as Konva.Text[];
+        allTextNodes.forEach(node => node.destroy());
+        
+        // Recreate text nodes from history state
+        currentState.textLayers.forEach(textLayer => {
+          const textNode = new Konva.Text({
+            id: textLayer.id,
+            x: textLayer.x,
+            y: textLayer.y,
+            text: textLayer.text,
+            fontSize: textLayer.fontSize,
+            fontFamily: textLayer.fontFamily,
+            fontStyle: textLayer.fontWeight,
+            fill: textLayer.color,
+            opacity: textLayer.opacity,
+            align: textLayer.alignment,
+            rotation: textLayer.rotation,
+            scaleX: textLayer.scaleX,
+            scaleY: textLayer.scaleY,
+            lineHeight: textLayer.lineHeight,
+            letterSpacing: textLayer.letterSpacing,
+            draggable: true,
+          });
+
+          // Add click event for selection (using current layer data, not closure)
+          textNode.on('click', () => {
+            if (!isRestoringHistory) {
+              setSelectedLayer(textLayer);
+            }
+          });
+
+          // Add drag event to update position
+          textNode.on('dragend', () => {
+            if (!isRestoringHistory) {
+              const updatedLayers = textLayers.map(layer => 
+                layer.id === textLayer.id 
+                  ? { ...layer, x: textNode.x(), y: textNode.y() }
+                  : layer
+              );
+              setTextLayers(updatedLayers);
+              setSelectedLayer(prev => prev?.id === textLayer.id ? { ...prev, x: textNode.x(), y: textNode.y() } : prev);
+            }
+          });
+
+          layer.add(textNode);
+        });
+        
+        // Clear selection as we're restoring from history
+        setSelectedLayer(null);
+        
+        // Redraw the layer
+        layer.batchDraw();
+      }
+      
+      // Reset flag after restoration is complete
+      setTimeout(() => {
+        isRestoringHistory = false;
+      }, 0);
+    }
+  }, [currentState, konvaStage]);
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        <header className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Adomate - Image Text Composer</h1>
-          <p className="text-gray-600">Upload a PNG image and add customizable text overlays</p>
-        </header>
+    <div className="h-screen bg-gray-50 flex flex-col">
+      {/* Header */}
+      <header className="flex-shrink-0 text-center py-6 px-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Adomate - Image Text Composer</h1>
+        <p className="text-gray-600">Upload a PNG image and add customizable text overlays</p>
+      </header>
 
-        {/* Error Display */}
-        {appError && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <svg className="w-3 h-3 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <p className="text-red-800 text-sm font-medium">{appError}</p>
-              <button
-                onClick={() => setAppError(null)}
-                className="ml-auto text-red-400 hover:text-red-600"
-              >
-                ×
-              </button>
+      {/* Error Display */}
+      {appError && (
+        <div className="flex-shrink-0 mx-6 mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+              <svg className="w-3 h-3 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
             </div>
+            <p className="text-red-800 text-sm font-medium">{appError}</p>
+            <button
+              onClick={() => setAppError(null)}
+              className="ml-auto text-red-400 hover:text-red-600"
+            >
+              ×
+            </button>
           </div>
-        )}
+        </div>
+      )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left Sidebar - Tools */}
-          <div className="lg:col-span-1 space-y-4">
-            <div className="bg-white rounded-lg p-4 shadow-sm">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Image</h2>
-              <ImageUpload 
-                onImageUpload={handleImageUpload} 
-                disabled={false}
+      {/* Main Content */}
+      <div className="flex-1 flex gap-6 px-6 pb-6 min-h-0">
+        {/* Left Sidebar - Scrollable Tools */}
+        <div className="w-80 flex-shrink-0">
+          <LeftToolbar
+            onImageUpload={handleImageUpload}
+            selectedLayer={selectedLayer}
+            onAddTextLayer={handleAddTextLayer}
+            onUpdateTextLayer={handleUpdateTextLayer}
+            layers={textLayers}
+            onSelectLayer={handleSelectLayer}
+            onReorderLayer={handleReorderLayer}
+            onDuplicateLayer={handleDuplicateLayer}
+            onDeleteLayer={handleDeleteLayer}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onUndo={undo}
+            onRedo={redo}
+            historyLength={historyLength}
+            onReset={handleResetDesign}
+            hasContent={!!backgroundImage || textLayers.length > 0}
+            onExport={handleExport}
+            canExport={!!backgroundImage}
+            backgroundImage={backgroundImage}
+          />
+        </div>
+
+        {/* Main Canvas Area */}
+        <div className="flex-1 bg-white rounded-lg p-6 shadow-sm min-h-0 flex flex-col">
+          {backgroundImage ? (
+            <div className="flex-1 flex items-center justify-center">
+              <CanvasEditor
+                backgroundImage={backgroundImage}
+                canvasWidth={canvasDimensions.width}
+                canvasHeight={canvasDimensions.height}
+                onCanvasReady={handleCanvasReady}
               />
             </div>
-            
-            {backgroundImage && (
-              <>
-                <TextToolsPanel
-                  selectedLayer={selectedLayer}
-                  onAddTextLayer={handleAddTextLayer}
-                  onUpdateTextLayer={handleUpdateTextLayer}
-                />
-                
-                <LayersPanel
-                  layers={textLayers}
-                  selectedLayer={selectedLayer}
-                  onSelectLayer={handleSelectLayer}
-                  onReorderLayer={handleReorderLayer}
-                  onDuplicateLayer={handleDuplicateLayer}
-                  onDeleteLayer={handleDeleteLayer}
-                />
-                
-                <HistoryPanel
-                  canUndo={canUndo}
-                  canRedo={canRedo}
-                  onUndo={undo}
-                  onRedo={redo}
-                  historyLength={historyLength}
-                />
-                
-                <AutosaveIndicator
-                  onReset={handleResetDesign}
-                  hasContent={!!backgroundImage || textLayers.length > 0}
-                />
-                
-                <ExportPanel
-                  onExport={handleExport}
-                  canExport={!!backgroundImage}
-                />
-              </>
-            )}
-          </div>
-
-          {/* Main Canvas Area */}
-          <div className="lg:col-span-3">
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              {backgroundImage ? (
-                <div className="flex justify-center">
-                  <CanvasEditor
-                    backgroundImage={backgroundImage}
-                    canvasWidth={canvasDimensions.width}
-                    canvasHeight={canvasDimensions.height}
-                    onCanvasReady={handleCanvasReady}
-                  />
-                </div>
-              ) : (
-                <div className="text-center py-20 text-gray-500">
-                  <p className="text-lg mb-2">No image uploaded</p>
-                  <p className="text-sm">Upload a PNG image to get started</p>
-                </div>
-              )}
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center text-gray-500">
+                <p className="text-lg mb-2">No image uploaded</p>
+                <p className="text-sm">Upload a PNG image to get started</p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
       

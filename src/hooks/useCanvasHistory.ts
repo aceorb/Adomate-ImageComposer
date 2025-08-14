@@ -12,6 +12,7 @@ export const useCanvasHistory = (initialState: CanvasState) => {
   });
 
   const addToHistory = useCallback((state: CanvasState) => {
+    console.log('addToHistory', state);
     setHistory(prev => {
       const newStates = [...prev.states.slice(0, prev.currentIndex + 1), state];
       
@@ -41,6 +42,13 @@ export const useCanvasHistory = (initialState: CanvasState) => {
     }));
   }, []);
 
+  const resetHistory = useCallback((newInitialState: CanvasState) => {
+    setHistory({
+      states: [newInitialState],
+      currentIndex: 0,
+    });
+  }, []);
+
   const canUndo = history.currentIndex > 0;
   const canRedo = history.currentIndex < history.states.length - 1;
   const currentState = history.states[history.currentIndex];
@@ -50,6 +58,7 @@ export const useCanvasHistory = (initialState: CanvasState) => {
     addToHistory,
     undo,
     redo,
+    resetHistory,
     canUndo,
     canRedo,
     historyLength: history.states.length,
