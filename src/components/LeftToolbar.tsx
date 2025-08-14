@@ -65,7 +65,7 @@ export const LeftToolbar: React.FC<LeftToolbarProps> = ({
   backgroundImage,
 }) => {
   return (
-    <div className="h-screen flex flex-col">
+    <div className="h-full flex flex-col">
       {/* Fixed header */}
       <div className="flex-shrink-0 bg-white rounded-lg p-4 shadow-sm mb-4">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Image</h2>

@@ -288,6 +288,7 @@ export const ImageTextComposer: React.FC = () => {
           canvasWidth: canvasDimensions.width,
           canvasHeight: canvasDimensions.height,
         };
+        console.log('dragend', currentCanvasState);
         addToHistory(currentCanvasState);
         dragStartState = null;
       }
@@ -763,18 +764,18 @@ export const ImageTextComposer: React.FC = () => {
   }, [currentState, konvaStage]);
 
   return (
-    <div className="h-screen bg-gray-50 flex flex-col">
+    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="flex-shrink-0 text-center py-6 px-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Adomate - Image Text Composer</h1>
-        <p className="text-gray-600">Upload a PNG image and add customizable text overlays</p>
+      <header className="flex-shrink-0 text-center py-4 px-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Adomate - Image Text Composer</h1>
+        <p className="text-sm text-gray-600">Upload a PNG image and add customizable text overlays</p>
       </header>
 
       {/* Error Display */}
       {appError && (
-        <div className="flex-shrink-0 mx-6 mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div className="flex-shrink-0 mx-6 mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <div className="w-4 h-4 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
               <svg className="w-3 h-3 text-red-600" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
               </svg>
@@ -791,7 +792,7 @@ export const ImageTextComposer: React.FC = () => {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex gap-6 px-6 pb-6 min-h-0">
+      <div className="flex-1 flex gap-4 px-4 pb-4 min-h-0 overflow-hidden">
         {/* Left Sidebar - Scrollable Tools */}
         <div className="w-80 flex-shrink-0">
           <LeftToolbar
@@ -818,9 +819,9 @@ export const ImageTextComposer: React.FC = () => {
         </div>
 
         {/* Main Canvas Area */}
-        <div className="flex-1 bg-white rounded-lg p-6 shadow-sm min-h-0 flex flex-col">
+        <div className="flex-1 bg-white rounded-lg p-4 shadow-sm min-h-0 flex flex-col overflow-hidden">
           {backgroundImage ? (
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center overflow-hidden">
               <CanvasEditor
                 backgroundImage={backgroundImage}
                 canvasWidth={canvasDimensions.width}
