@@ -1,4 +1,4 @@
-# Adomate - Image Text Composer
+# Adomate - Image Text Composer(Sebastian)
 
 A professional image text overlay editor built with Next.js and Konva.js. Create stunning text compositions on PNG images with advanced typography controls, interactive transformations, and seamless export functionality.
 
